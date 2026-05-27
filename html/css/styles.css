@@ -1,0 +1,435 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@500;700;900&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+/* --- TEMAS D&D (VARIABLES CSS) --- */
+:root {
+  /* Default: Dragons Lair */
+  --primary: #e23e3e;
+  --primary-glow: rgba(226, 62, 62, 0.4);
+  --secondary: #d4af37;
+  --secondary-glow: rgba(212, 175, 55, 0.3);
+  --bg: #0f0707;
+  --surface: rgba(26, 12, 12, 0.75);
+  --surface-border: rgba(212, 175, 55, 0.3);
+  --text: #f7fafc;
+  --text-muted: #cbd5e0;
+  --shadow: rgba(0, 0, 0, 0.6);
+  --glow-intensity: 8px;
+  --card-radius: 12px;
+  --transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+[data-theme="dragons_lair"] {
+  --primary: #e23e3e;
+  --primary-glow: rgba(226, 62, 62, 0.45);
+  --secondary: #d4af37;
+  --secondary-glow: rgba(212, 175, 55, 0.35);
+  --bg: #100606;
+  --surface: rgba(26, 12, 12, 0.78);
+  --surface-border: rgba(212, 175, 55, 0.25);
+  --text: #f7fafc;
+  --text-muted: #cbd5e0;
+  --shadow: rgba(0, 0, 0, 0.75);
+}
+
+[data-theme="elven_forest"] {
+  --primary: #2b804e;
+  --primary-glow: rgba(43, 128, 78, 0.45);
+  --secondary: #b5891a;
+  --secondary-glow: rgba(181, 137, 26, 0.3);
+  --bg: #060b06;
+  --surface: rgba(14, 25, 14, 0.78);
+  --surface-border: rgba(181, 137, 26, 0.25);
+  --text: #f0fff4;
+  --text-muted: #c6f6d5;
+  --shadow: rgba(0, 0, 0, 0.7);
+}
+
+[data-theme="mystic_underdark"] {
+  --primary: #805ad5;
+  --primary-glow: rgba(128, 90, 213, 0.45);
+  --secondary: #3182ce;
+  --secondary-glow: rgba(49, 130, 206, 0.3);
+  --bg: #050209;
+  --surface: rgba(14, 9, 25, 0.78);
+  --surface-border: rgba(49, 130, 206, 0.25);
+  --text: #faf5ff;
+  --text-muted: #e9d8fd;
+  --shadow: rgba(0, 0, 0, 0.85);
+}
+
+[data-theme="tavern_parchment"] {
+  --primary: #8b4513;
+  --primary-glow: rgba(139, 69, 19, 0.25);
+  --secondary: #b7791f;
+  --secondary-glow: rgba(183, 121, 31, 0.25);
+  --bg: #f4ebd0;
+  --surface: rgba(250, 246, 230, 0.95);
+  --surface-border: rgba(139, 69, 19, 0.3);
+  --text: #2d3748;
+  --text-muted: #4a5568;
+  --shadow: rgba(80, 50, 20, 0.15);
+}
+
+/* --- RESET & LAYOUT --- */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'Outfit', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  position: relative;
+  transition: background-color 0.8s ease, color 0.5s ease;
+}
+
+/* Medieval background pattern overlays */
+body::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-image: radial-gradient(circle at 50% 50%, transparent 60%, rgba(0,0,0,0.4) 100%), 
+                    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cpath d='M40 0 C45 10 55 10 60 20 C65 30 55 40 40 40 C25 40 15 30 20 20 C25 10 35 10 40 0 Z' fill='%23d4af37' fill-opacity='0.02'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
+[data-theme="tavern_parchment"]::before {
+  background-image: radial-gradient(circle at 50% 50%, transparent 60%, rgba(139, 69, 19, 0.1) 100%), 
+                    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cpath d='M40 0 C45 10 55 10 60 20 C65 30 55 40 40 40 C25 40 15 30 20 20 C25 10 35 10 40 0 Z' fill='%238b4513' fill-opacity='0.015'/%3E%3C/svg%3E");
+}
+
+/* --- TYPOGRAPHY --- */
+h1, h2, h3, h4, h5, h6, .brand-title {
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.brand-decorative {
+  font-family: 'Cinzel Decorative', serif;
+  font-weight: 900;
+}
+
+/* --- SCROLLBAR --- */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border: 2px solid var(--bg);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--secondary);
+}
+
+/* --- BUTTONS & CONTROLS --- */
+button, .btn {
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+  border: 1px solid var(--secondary);
+  border-radius: 4px;
+  background: linear-gradient(135deg, var(--primary), rgba(0,0,0,0.3));
+  color: #ffffff;
+  padding: 10px 20px;
+  outline: none;
+  position: relative;
+  overflow: hidden;
+  transition: var(--transition);
+  box-shadow: 0 4px 10px var(--shadow);
+}
+
+[data-theme="tavern_parchment"] button, [data-theme="tavern_parchment"] .btn {
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  border: 1px solid var(--primary);
+}
+
+button::before, .btn::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: 0.5s;
+}
+
+button:hover::before, .btn:hover::before {
+  left: 100%;
+}
+
+button:hover, .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 var(--glow-intensity) var(--primary-glow), 0 6px 15px var(--shadow);
+  border-color: #ffffff;
+}
+
+button:active, .btn:active {
+  transform: translateY(1px);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--secondary);
+  border-color: var(--secondary);
+}
+.btn-secondary:hover {
+  background: rgba(212, 175, 55, 0.1);
+  color: #ffffff;
+}
+
+[data-theme="tavern_parchment"] .btn-secondary {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+[data-theme="tavern_parchment"] .btn-secondary:hover {
+  background: rgba(139, 69, 19, 0.1);
+  color: var(--primary);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #c53030, rgba(0,0,0,0.4));
+  border-color: #feb2b2;
+}
+.btn-danger:hover {
+  box-shadow: 0 0 10px rgba(197, 48, 48, 0.6);
+}
+
+/* --- CARDS & GLASSMORPHISM --- */
+.card-glass {
+  background: var(--surface);
+  border: 1.5px solid var(--surface-border);
+  border-radius: var(--card-radius);
+  box-shadow: 0 8px 32px var(--shadow);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 24px;
+  position: relative;
+  transition: var(--transition);
+  z-index: 1;
+}
+
+.card-glass:hover {
+  border-color: var(--secondary);
+  box-shadow: 0 0 15px var(--secondary-glow), 0 10px 35px var(--shadow);
+  transform: translateY(-4px);
+}
+
+/* --- FORMS & INPUTS --- */
+.form-group {
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  font-family: 'Cinzel', serif;
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+  color: var(--secondary);
+  letter-spacing: 1px;
+}
+
+[data-theme="tavern_parchment"] .form-group label {
+  color: var(--primary);
+}
+
+.form-control {
+  font-family: 'Outfit', sans-serif;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 12px 16px;
+  font-size: 1rem;
+  transition: var(--transition);
+  outline: none;
+}
+
+[data-theme="tavern_parchment"] .form-control {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(139, 69, 19, 0.2);
+}
+
+.form-control:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 8px var(--primary-glow);
+  background: rgba(0, 0, 0, 0.6);
+}
+
+[data-theme="tavern_parchment"] .form-control:focus {
+  background: #ffffff;
+  border-color: var(--primary);
+  box-shadow: 0 0 8px rgba(139, 69, 19, 0.2);
+}
+
+/* --- HEADERS & NAV --- */
+header {
+  border-bottom: 1.5px solid var(--surface-border);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  transition: var(--transition);
+}
+
+[data-theme="tavern_parchment"] header {
+  background: rgba(244, 235, 220, 0.85);
+  border-bottom-color: rgba(139, 69, 19, 0.2);
+}
+
+.nav-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 15px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.logo-icon {
+  width: 42px;
+  height: 42px;
+}
+
+.site-title {
+  font-size: 1.6rem;
+  font-weight: 900;
+  background: linear-gradient(135deg, #ffffff 30%, var(--secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+
+[data-theme="tavern_parchment"] .site-title {
+  background: linear-gradient(135deg, var(--primary) 30%, var(--secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+}
+
+.nav-menu {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  list-style: none;
+}
+
+.nav-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 1.5px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  transition: var(--transition);
+}
+
+.nav-link:hover {
+  color: var(--secondary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="tavern_parchment"] .nav-link:hover {
+  color: var(--primary);
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.nav-link.active {
+  color: var(--secondary);
+  border-bottom: 2px solid var(--secondary);
+  border-radius: 0;
+}
+
+[data-theme="tavern_parchment"] .nav-link.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+/* --- FOOTER --- */
+footer {
+  margin-top: auto;
+  border-top: 1.5px solid var(--surface-border);
+  background: rgba(0, 0, 0, 0.6);
+  padding: 20px 30px;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  z-index: 1;
+}
+
+[data-theme="tavern_parchment"] footer {
+  background: rgba(244, 235, 220, 0.95);
+  border-top-color: rgba(139, 69, 19, 0.15);
+  color: var(--text-muted);
+}
+
+/* --- NOTIFICACIONES / TOASTS --- */
+.notification-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.toast {
+  background: rgba(20, 10, 30, 0.95);
+  border: 1.5px solid var(--secondary);
+  box-shadow: 0 4px 20px var(--shadow);
+  color: #fff;
+  padding: 15px 25px;
+  border-radius: 6px;
+  font-family: 'Outfit', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  min-width: 300px;
+  max-width: 450px;
+  animation: slideIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  backdrop-filter: blur(5px);
+}
+
+.toast.success {
+  border-color: #48bb78;
+}
+
+.toast.error {
+  border-color: #f56565;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(120%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fadeOut {
+  to { opacity: 0; transform: translateY(10px); }
+}

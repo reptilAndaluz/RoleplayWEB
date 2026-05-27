@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual Environment
+venv/
+.venv/
+env/
+ENV/
+
+# Local configuration and secure files
+*.pem
+*.key
+cert.pem
+key.pem
+
+# Databases and user uploaded files
+data/usuarios.json
+data/personajes.json
+html/uploads/

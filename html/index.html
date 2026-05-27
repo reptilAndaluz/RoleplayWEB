@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dragons_lair">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gremio de Héroes D&D - Iniciar Sesión</title>
+  <!-- SEO -->
+  <meta name="description" content="Inicia sesión en el archivo místico del Gremio de Héroes D&D para gestionar tus fichas de personaje y campañas de rol.">
+  <link rel="stylesheet" href="/html/css/styles.css">
+  <style>
+    /* Estilos específicos de la página de Login */
+    .login-wrapper {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 40px 20px;
+      z-index: 1;
+    }
+    
+    .login-card {
+      max-width: 480px;
+      width: 100%;
+      text-align: center;
+      animation: cardEntrance 0.8s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+    }
+    
+    .logo-container {
+      margin-bottom: 24px;
+      position: relative;
+      display: inline-block;
+    }
+    
+    .logo-glow {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 90px; height: 90px;
+      background: var(--primary-glow);
+      filter: blur(15px);
+      border-radius: 50%;
+      z-index: -1;
+      animation: pulse 3s infinite ease-in-out;
+    }
+    
+    .logo-img {
+      width: 80px;
+      height: 80px;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));
+    }
+    
+    .login-card h2 {
+      font-size: 2rem;
+      margin-bottom: 8px;
+      color: #ffffff;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.6);
+    }
+    
+    [data-theme="tavern_parchment"] .login-card h2 {
+      color: var(--primary);
+      text-shadow: none;
+    }
+    
+    .login-card p.subtitle {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      margin-bottom: 32px;
+      line-height: 1.5;
+    }
+    
+    .form-control-container {
+      position: relative;
+    }
+    
+    .input-icon {
+      position: absolute;
+      left: 14px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--secondary);
+      opacity: 0.7;
+      pointer-events: none;
+    }
+    
+    [data-theme="tavern_parchment"] .input-icon {
+      color: var(--primary);
+    }
+    
+    .form-control-with-icon {
+      padding-left: 42px;
+    }
+    
+    .login-btn {
+      width: 100%;
+      margin-top: 10px;
+      padding: 14px 20px;
+      font-size: 1.1rem;
+    }
+    
+    @keyframes cardEntrance {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+      50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.8; }
+    }
+  </style>
+  <!-- Script de carga rápida del Tema para evitar destellos -->
+  <script>
+    (async function() {
+      try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+          const config = await response.json();
+          if (config.tema) {
+            document.documentElement.setAttribute('data-theme', config.tema);
+            if (config.titulo) {
+              document.title = config.titulo + " - Iniciar Sesión";
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Error al cargar la configuración inicial:", e);
+      }
+    })();
+  </script>
+</head>
+<body>
+  
+  <div class="login-wrapper">
+    <div class="login-card card-glass">
+      
+      <div class="logo-container">
+        <div class="logo-glow"></div>
+        <!-- SVG Embebido del Logo D20 Místico -->
+        <svg class="logo-img" viewBox="0 0 100 100" id="site-logo">
+          <polygon points="50,5 90,25 90,75 50,95 10,75 10,25" fill="none" stroke="var(--secondary)" stroke-width="3"/>
+          <polygon points="50,5 50,95" fill="none" stroke="var(--secondary)" stroke-width="1.5"/>
+          <polygon points="10,25 90,25" fill="none" stroke="var(--secondary)" stroke-width="1.5"/>
+          <polygon points="10,75 90,75" fill="none" stroke="var(--secondary)" stroke-width="1.5"/>
+          <polygon points="50,5 90,75" fill="none" stroke="var(--secondary)" stroke-width="1.5"/>
+          <polygon points="50,5 10,75" fill="none" stroke="var(--secondary)" stroke-width="1.5"/>
+          <polygon points="90,25 50,95" fill="none" stroke="var(--secondary)" stroke-width="1.5"/>
+          <polygon points="10,25 50,95" fill="none" stroke="var(--secondary)" stroke-width="1.5"/>
+          <circle cx="50" cy="50" r="18" fill="var(--bg)" stroke="var(--primary)" stroke-width="2"/>
+          <text x="50" y="55" font-family="'Cinzel', serif" font-weight="bold" font-size="16" fill="var(--text)" text-anchor="middle">20</text>
+        </svg>
+      </div>
+      
+      <h2 id="login-title" class="brand-decorative">Gremio de Héroes</h2>
+      <p id="login-subtitle" class="subtitle">Registra las fichas de tus personajes y lleva el registro místico de tus hazañas de rol.</p>
+      
+      <form id="login-form">
+        <div class="form-group">
+          <label for="username">Nombre de Aventurero</label>
+          <div class="form-control-container">
+            <span class="input-icon">👤</span>
+            <input type="text" id="username" class="form-control form-control-with-icon" placeholder="Ej. Regdar, Mago123" required autocomplete="username">
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="password">Contraseña Secreta</label>
+          <div class="form-control-container">
+            <span class="input-icon">🔑</span>
+            <input type="password" id="password" class="form-control form-control-with-icon" placeholder="••••••••" required autocomplete="current-password">
+          </div>
+        </div>
+        
+        <button type="submit" class="btn login-btn">Franquear Entrada</button>
+      </form>
+      
+      <!-- Alternar entre Login y Registro -->
+      <div style="margin-top: 25px; font-size: 0.9rem;">
+        <span id="toggle-msg" style="color: var(--text-muted);">¿Aún no has sido alistado?</span>
+        <a href="#" id="toggle-auth-btn" style="color: var(--secondary); font-weight: bold; margin-left: 6px; text-decoration: underline; transition: var(--transition);">Alistarse en el Gremio</a>
+      </div>
+      
+    </div>
+  </div>
+  
+  <div class="notification-container" id="notification-container"></div>
+  
+  <footer>
+    <p>&copy; 2026 Gremio de Héroes D&D. Archivo Místico Privado.</p>
+  </footer>
+  
+  <script src="/html/js/auth.js"></script>
+  <script>
+    // Lógica para procesar Login y Auto-registro
+    document.addEventListener("DOMContentLoaded", () => {
+      // Redirigir al portal si ya está logueado
+      if (Auth.isLoggedIn()) {
+        window.location.href = "/html/portal.html";
+        return;
+      }
+      
+      let isRegisterMode = false;
+      let cachedConfig = {};
+
+      // Personalizar textos e icono dinámicamente si hay config
+      fetch('/api/config')
+        .then(res => res.json())
+        .then(config => {
+          cachedConfig = config;
+          applyConfigValues();
+        }).catch(err => console.error("Error al pintar config:", err));
+
+      function applyConfigValues() {
+        if (isRegisterMode) {
+          document.getElementById("login-title").innerText = "Alistarse en el Gremio";
+          document.getElementById("login-subtitle").innerText = "Completa tu alistamiento oficial para poder crear y custodiar tus personajes de rol.";
+          document.querySelector(".login-btn").innerText = "Alistarse en el Gremio";
+          document.getElementById("toggle-msg").innerText = "¿Ya perteneces al gremio?";
+          document.getElementById("toggle-auth-btn").innerText = "Franquear Entrada";
+        } else {
+          document.getElementById("login-title").innerText = cachedConfig.titulo || "Gremio de Héroes";
+          document.getElementById("login-subtitle").innerText = cachedConfig.descripcion || "Registra las fichas de tus personajes y lleva el registro místico de tus hazañas de rol.";
+          document.querySelector(".login-btn").innerText = "Franquear Entrada";
+          document.getElementById("toggle-msg").innerText = "¿Aún no has sido alistado?";
+          document.getElementById("toggle-auth-btn").innerText = "Alistarse en el Gremio";
+        }
+        
+        if (cachedConfig.logo) {
+          const logoSvg = document.getElementById("site-logo");
+          if (logoSvg) {
+            const img = document.createElement("img");
+            img.src = cachedConfig.logo;
+            img.className = "logo-img";
+            img.alt = "Logo Personalizado";
+            img.id = "site-logo";
+            logoSvg.replaceWith(img);
+          }
+        }
+      }
+
+      // Manejar alternancia
+      const toggleBtn = document.getElementById("toggle-auth-btn");
+      toggleBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        isRegisterMode = !isRegisterMode;
+        applyConfigValues();
+        document.getElementById("password").value = "";
+      });
+
+      const loginForm = document.getElementById("login-form");
+      loginForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        
+        const usernameInput = document.getElementById("username");
+        const passwordInput = document.getElementById("password");
+        
+        if (isRegisterMode) {
+          // REGISTRO
+          try {
+            Auth.showToast("Inscribiendo tu nombre en los pergaminos...", "success");
+            const response = await fetch("/api/auth/register", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                username: usernameInput.value,
+                password: passwordInput.value
+              })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+              throw new Error(data.detail || "Fallo al alistarse");
+            }
+            Auth.showToast(data.message || "¡Registrado correctamente!", "success");
+            
+            // Alternar de vuelta a login para que ingresen
+            isRegisterMode = false;
+            applyConfigValues();
+            passwordInput.value = "";
+          } catch (err) {
+            Auth.showToast(err.message, "error");
+          }
+        } else {
+          // LOGIN
+          const success = await Auth.login(usernameInput.value, passwordInput.value);
+          if (success) {
+            Auth.showToast("¡Has franqueado la entrada con éxito, viajero!", "success");
+            setTimeout(() => {
+              window.location.href = "/html/portal.html";
+            }, 1200);
+          } else {
+            Auth.showToast("Las credenciales mágicas no son válidas.", "error");
+            passwordInput.value = "";
+            passwordInput.focus();
+          }
+        }
+      });
+    });
+  </script>
+</body>
+</html>

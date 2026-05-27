@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dragons_lair">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gremio de Héroes D&D - Archivo de Héroes</title>
+  <!-- SEO -->
+  <meta name="description" content="Dashboard del Gremio de Héroes D&D. Explora, filtra, edita e importa tus personajes y fichas de rol de forma mística.">
+  <link rel="stylesheet" href="/html/css/styles.css">
+  <link rel="stylesheet" href="/html/css/portal.css">
+  <!-- Script de carga rápida del Tema -->
+  <script>
+    (async function() {
+      try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+          const config = await response.json();
+          if (config.tema) {
+            document.documentElement.setAttribute('data-theme', config.tema);
+            if (config.titulo) {
+              document.title = config.titulo + " - Archivo de Héroes";
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Error al cargar la configuración:", e);
+      }
+    })();
+  </script>
+</head>
+<body>
+
+  <!-- Cabecera Mística -->
+  <header>
+    <div class="nav-container">
+      <a href="/html/portal.html" class="logo-section">
+        <svg class="logo-icon" viewBox="0 0 100 100" id="header-logo">
+          <polygon points="50,5 90,25 90,75 50,95 10,75 10,25" fill="none" stroke="var(--secondary)" stroke-width="2.5"/>
+          <polygon points="50,5 50,95" fill="none" stroke="var(--secondary)" stroke-width="1.2"/>
+          <polygon points="10,25 90,25" fill="none" stroke="var(--secondary)" stroke-width="1.2"/>
+          <polygon points="10,75 90,75" fill="none" stroke="var(--secondary)" stroke-width="1.2"/>
+          <circle cx="50" cy="50" r="14" fill="var(--bg)" stroke="var(--primary)" stroke-width="1.5"/>
+          <text x="50" y="54" font-family="'Cinzel', serif" font-weight="bold" font-size="12" fill="var(--text)" text-anchor="middle">20</text>
+        </svg>
+        <span class="site-title" id="site-title-text">Gremio de Héroes</span>
+      </a>
+      
+      <ul class="nav-menu">
+        <li><a href="/html/portal.html" class="nav-link active">Crónicas</a></li>
+        <li><a href="/html/crearEntrada.html" class="nav-link">Crear Héroe</a></li>
+        <li id="admin-nav-item" style="display: none;"><a href="/html/admin.html" class="nav-link">Personalizar</a></li>
+        <li><button id="logout-btn" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;">Salir</button></li>
+      </ul>
+    </div>
+  </header>
+
+  <!-- Contenido del Portal -->
+  <main class="portal-container">
+    
+    <!-- Barra de bienvenida y acción principal -->
+    <section class="toolbar-section">
+      <div class="action-bar">
+        <div class="user-welcome-title">
+          <h2 id="welcome-message">Archivo de Héroes</h2>
+          <p>Bienvenido al registro donde reposan las leyendas de tus campañas de D&D.</p>
+        </div>
+        <div class="action-buttons-group">
+          <a href="/html/crearEntrada.html" class="btn">Invocar Nuevo Héroe</a>
+        </div>
+      </div>
+      
+      <!-- Barra de Filtros e Inputs -->
+      <div class="search-filters-bar card-glass" style="padding: 16px;">
+        <div class="form-group" style="margin: 0;">
+          <input type="text" id="search-input" class="form-control" placeholder="Buscar por nombre, apodo o habilidad..." style="padding: 10px 14px;">
+        </div>
+        
+        <div class="form-group" style="margin: 0;">
+          <select id="filter-campaign" class="form-control" style="padding: 10px 14px; cursor: pointer;">
+            <option value="">Todas las Campañas</option>
+          </select>
+        </div>
+        
+        <div class="form-group" style="margin: 0;">
+          <select id="filter-class" class="form-control" style="padding: 10px 14px; cursor: pointer;">
+            <option value="">Todas las Clases</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- Grid de Personajes -->
+    <section class="character-grid" id="character-grid">
+      <!-- Se carga dinámicamente con JS -->
+      <div class="empty-state">
+        <div class="empty-state-icon">🔮</div>
+        <h3>Consultando los Registros del Gremio...</h3>
+        <p>Alineando estrellas mágicas y cargando fichas de héroe.</p>
+      </div>
+    </section>
+
+    <!-- Sección de Copias de Seguridad y Cargas Masivas -->
+    <section class="backup-import-section">
+      
+      <!-- Tarjeta de Exportación / Copia de Seguridad -->
+      <div class="backup-card card-glass">
+        <h3>Resguardar Registro Místico</h3>
+        <p>Descarga una copia completa de tus personajes en formato CSV o JSON. Ideal para guardarlos localmente o compartirlos con tu dungeon master.</p>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+          <button id="export-json-btn" class="btn btn-secondary">Respaldar en JSON</button>
+          <button id="export-csv-btn" class="btn btn-secondary">Respaldar en CSV</button>
+        </div>
+      </div>
+      
+      <!-- Tarjeta de Importación Masiva / Plantilla -->
+      <div class="import-card card-glass">
+        <h3>Invocación Masiva (Carga por Archivo)</h3>
+        <p>Carga múltiples fichas de personaje a la vez importando un archivo CSV o JSON. También puedes descargar la plantilla de referencia para rellenar tus datos.</p>
+        
+        <div style="margin-bottom: 20px;">
+          <button id="download-template-btn" class="btn btn-secondary" style="padding: 8px 16px; font-size: 0.85rem;">Descargar Plantilla CSV</button>
+        </div>
+
+        <form id="import-form" class="import-form">
+          <div class="file-drop-area" id="file-drop-area">
+            <span class="file-drop-text">Arrastra aquí tu archivo CSV o JSON, o haz clic para seleccionarlo</span>
+            <input type="file" id="import-file-input" accept=".csv,.json" required>
+          </div>
+          <button type="submit" class="btn" style="width: 100%;">Efectuar Invocación Masiva</button>
+        </form>
+      </div>
+
+    </section>
+
+  </main>
+
+
+
+  <div class="notification-container" id="notification-container"></div>
+
+  <footer>
+    <p>&copy; 2026 Gremio de Héroes D&D. Archivo Místico Privado.</p>
+  </footer>
+
+  <script src="/html/js/auth.js"></script>
+  <script src="/html/js/portal.js"></script>
+</body>
+</html>

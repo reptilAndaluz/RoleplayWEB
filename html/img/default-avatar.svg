@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <!-- Background circle with mystical purple gradient -->
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#3d155f" />
+      <stop offset="100%" stop-color="#140526" />
+    </radialGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffe066" />
+      <stop offset="50%" stop-color="#d4af37" />
+      <stop offset="100%" stop-color="#aa7c11" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Mystical Background -->
+  <circle cx="50" cy="50" r="48" fill="url(#bgGrad)" stroke="url(#goldGrad)" stroke-width="2"/>
+  
+  <!-- Outer Shield Border -->
+  <path d="M 50 15 C 65 15, 80 20, 80 35 C 80 60, 50 85, 50 85 C 50 85, 20 60, 20 35 C 20 20, 35 15, 50 15 Z" 
+        fill="none" stroke="url(#goldGrad)" stroke-width="1.5" stroke-dasharray="200" stroke-dashoffset="0" opacity="0.7"/>
+
+  <!-- Mystic Runes / Ornaments on Shield Background -->
+  <circle cx="50" cy="48" r="28" fill="none" stroke="#d4af37" stroke-width="0.5" stroke-dasharray="4,4" opacity="0.5"/>
+  <circle cx="50" cy="48" r="24" fill="none" stroke="#d4af37" stroke-width="0.5" opacity="0.3"/>
+
+  <!-- The D20 Die (Dungeons & Dragons core symbol) -->
+  <g transform="translate(50, 48) scale(0.95)">
+    <!-- Back face / Outer edges of D20 -->
+    <!-- Outer Triangle points (relative to center 0,0) -->
+    <!-- p1 (0, -22), p2 (19, -11), p3 (19, 11), p4 (0, 22), p5 (-19, 11), p6 (-19, -11) -->
+    <polygon points="0,-22 19,-11 19,11 0,22 -19,11 -19,-11" fill="#291147" stroke="url(#goldGrad)" stroke-width="1.2"/>
+    
+    <!-- Inner lines making up the D20 face structure -->
+    <!-- Top triangle -->
+    <polygon points="0,-22 -9.5,-5.5 9.5,-5.5" fill="#4d1c8c" stroke="url(#goldGrad)" stroke-width="0.8"/>
+    <!-- Top-Right triangle -->
+    <polygon points="9.5,-5.5 0,-22 19,-11" fill="#351363" stroke="url(#goldGrad)" stroke-width="0.8"/>
+    <!-- Top-Left triangle -->
+    <polygon points="-9.5,-5.5 0,-22 -19,-11" fill="#351363" stroke="url(#goldGrad)" stroke-width="0.8"/>
+    
+    <!-- Center-Left triangle -->
+    <polygon points="-9.5,-5.5 -19,-11 -19,11" fill="#200a3d" stroke="url(#goldGrad)" stroke-width="0.8"/>
+    <!-- Center-Right triangle -->
+    <polygon points="9.5,-5.5 19,-11 19,11" fill="#200a3d" stroke="url(#goldGrad)" stroke-width="0.8"/>
+    
+    <!-- Lower-Left triangle -->
+    <polygon points="-9.5,-5.5 -19,11 -9.5,16.5" fill="#291147" stroke="url(#goldGrad)" stroke-width="0.8"/>
+    <!-- Lower-Right triangle -->
+    <polygon points="9.5,-5.5 19,11 9.5,16.5" fill="#291147" stroke="url(#goldGrad)" stroke-width="0.8"/>
+    
+    <!-- Bottom triangle -->
+    <polygon points="-9.5,16.5 0,22 9.5,16.5" fill="#3b136b" stroke="url(#goldGrad)" stroke-width="0.8"/>
+    
+    <!-- Inner-Center bottom-left -->
+    <polygon points="-9.5,-5.5 -9.5,16.5 0,5.5" fill="#58219e" stroke="url(#goldGrad)" stroke-width="0.8"/>
+    <!-- Inner-Center bottom-right -->
+    <polygon points="9.5,-5.5 9.5,16.5 0,5.5" fill="#58219e" stroke="url(#goldGrad)" stroke-width="0.8"/>
+    <!-- Inner-Center top -->
+    <polygon points="-9.5,-5.5 9.5,-5.5 0,5.5" fill="#6d2bbb" stroke="url(#goldGrad)" stroke-width="1" filter="url(#glow)"/>
+    
+    <!-- Number 20 on the front face -->
+    <text x="0" y="2" font-family="'Cinzel', 'Cinzel Decorative', 'Georgia', serif" font-weight="900" font-size="10" 
+          fill="#ffe066" text-anchor="middle" dominant-baseline="middle" filter="url(#glow)">20</text>
+  </g>
+</svg>

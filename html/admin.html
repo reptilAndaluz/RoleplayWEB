@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dragons_lair">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gremio de Héroes D&D - Administración</title>
+  <!-- SEO -->
+  <meta name="description" content="Panel de administración del Gremio de Héroes D&D. Gestiona tus aventureros de rol y personaliza los temas visuales del portal.">
+  <link rel="stylesheet" href="/html/css/styles.css">
+  <link rel="stylesheet" href="/html/css/admin.css">
+  <!-- Script de carga rápida del Tema -->
+  <script>
+    (async function() {
+      try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+          const config = await response.json();
+          if (config.tema) {
+            document.documentElement.setAttribute('data-theme', config.tema);
+            if (config.titulo) {
+              document.title = config.titulo + " - Administración";
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Error al cargar la configuración:", e);
+      }
+    })();
+  </script>
+</head>
+<body>
+
+  <!-- Cabecera Mística -->
+  <header>
+    <div class="nav-container">
+      <a href="/html/portal.html" class="logo-section">
+        <svg class="logo-icon" viewBox="0 0 100 100" id="header-logo">
+          <polygon points="50,5 90,25 90,75 50,95 10,75 10,25" fill="none" stroke="var(--secondary)" stroke-width="2.5"/>
+          <polygon points="50,5 50,95" fill="none" stroke="var(--secondary)" stroke-width="1.2"/>
+          <polygon points="10,25 90,25" fill="none" stroke="var(--secondary)" stroke-width="1.2"/>
+          <polygon points="10,75 90,75" fill="none" stroke="var(--secondary)" stroke-width="1.2"/>
+          <circle cx="50" cy="50" r="14" fill="var(--bg)" stroke="var(--primary)" stroke-width="1.5"/>
+          <text x="50" y="54" font-family="'Cinzel', serif" font-weight="bold" font-size="12" fill="var(--text)" text-anchor="middle">20</text>
+        </svg>
+        <span class="site-title" id="site-title-text">Gremio de Héroes</span>
+      </a>
+      
+      <ul class="nav-menu">
+        <li><a href="/html/portal.html" class="nav-link">Crónicas</a></li>
+        <li><a href="/html/crearEntrada.html" class="nav-link">Crear Héroe</a></li>
+        <li id="admin-nav-item"><a href="/html/admin.html" class="nav-link active">Personalizar</a></li>
+        <li><button id="logout-btn" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;">Salir</button></li>
+      </ul>
+    </div>
+  </header>
+
+  <!-- Contenedor del Panel -->
+  <main class="admin-container">
+    
+    <div class="admin-header">
+      <h2>Santuario de Administración</h2>
+      <p>Modifica el aspecto visual del gremio o gestiona los aventureros con acceso a las crónicas.</p>
+    </div>
+
+    <!-- Navegación por pestañas -->
+    <nav class="admin-tabs">
+      <button class="admin-tab-btn active" data-tab="tab-customize">Branding y Apariencia</button>
+      <button class="admin-tab-btn" data-tab="tab-users">Gestionar Aventureros</button>
+    </nav>
+
+    <!-- PESTAÑA 1: BRANDING Y APARIENCIA -->
+    <section class="tab-pane active" id="tab-customize">
+      <div class="card-glass" style="padding: 35px;">
+        <h3 style="font-family: 'Cinzel', serif; color: var(--secondary); margin-bottom: 20px;">Aspecto del Portal</h3>
+        
+        <form id="branding-form">
+          <div class="form-group">
+            <label for="brand-titulo">Título del Portal</label>
+            <input type="text" id="brand-titulo" class="form-control" required placeholder="Ej. El Santuario de Héroes">
+          </div>
+          
+          <div class="form-group">
+            <label for="brand-desc">Descripción o Lema Místico</label>
+            <textarea id="brand-desc" class="form-control" rows="3" required placeholder="El santuario místico donde reposan las crónicas de los héroes..."></textarea>
+          </div>
+
+          <!-- Selección de Temas Predefinidos -->
+          <div class="form-group" style="margin-top: 25px;">
+            <label>Paleta de Colores de D&D</label>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">Selecciona la temática visual mágica que envolverá todo el portal.</p>
+            
+            <div class="theme-selector-grid">
+              
+              <!-- Opción 1: Dragons Lair -->
+              <div class="theme-card-option selected" data-theme-value="dragons_lair">
+                <div class="theme-card-color-preview">
+                  <div class="color-bar" style="background: #e23e3e;"></div>
+                  <div class="color-bar" style="background: #d4af37;"></div>
+                  <div class="color-bar" style="background: #100606;"></div>
+                </div>
+                <span class="theme-card-title">🐉 Dragon's Lair</span>
+              </div>
+              
+              <!-- Opción 2: Elven Forest -->
+              <div class="theme-card-option" data-theme-value="elven_forest">
+                <div class="theme-card-color-preview">
+                  <div class="color-bar" style="background: #2b804e;"></div>
+                  <div class="color-bar" style="background: #b5891a;"></div>
+                  <div class="color-bar" style="background: #060b06;"></div>
+                </div>
+                <span class="theme-card-title">🧝 Elven Forest</span>
+              </div>
+              
+              <!-- Opción 3: Mystic Underdark -->
+              <div class="theme-card-option" data-theme-value="mystic_underdark">
+                <div class="theme-card-color-preview">
+                  <div class="color-bar" style="background: #805ad5;"></div>
+                  <div class="color-bar" style="background: #3182ce;"></div>
+                  <div class="color-bar" style="background: #050209;"></div>
+                </div>
+                <span class="theme-card-title">🔮 Mystic Underdark</span>
+              </div>
+              
+              <!-- Opción 4: Tavern Parchment -->
+              <div class="theme-card-option" data-theme-value="tavern_parchment">
+                <div class="theme-card-color-preview">
+                  <div class="color-bar" style="background: #8b4513;"></div>
+                  <div class="color-bar" style="background: #b7791f;"></div>
+                  <div class="color-bar" style="background: #f4ebd0;"></div>
+                </div>
+                <span class="theme-card-title">📜 Tavern Parchment</span>
+              </div>
+
+            </div>
+          </div>
+          
+          <!-- Personalización del Logo (Subida de Imagen) -->
+          <div class="form-group" style="margin-top: 30px;">
+            <label>Sello o Emblema del Gremio (Logo)</label>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">Sube una imagen para reemplazar el logo de D20 por defecto en la cabecera.</p>
+            
+            <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+              <div id="logo-preview-container" style="width: 60px; height: 60px; border: 1.5px solid var(--surface-border); border-radius: 6px; display: flex; justify-content: center; align-items: center; overflow: hidden; background: rgba(0,0,0,0.3);">
+                <!-- Se inyecta la preview -->
+                <span style="font-size: 1.5rem;">🔮</span>
+              </div>
+              <label class="btn btn-secondary" style="margin: 0; font-size: 0.85rem; padding: 8px 16px;">
+                Subir Emblema
+                <input type="file" id="logo-file-input" accept="image/*" style="display: none;">
+              </label>
+              <button type="button" id="logo-clear-btn" class="btn btn-danger" style="display: none; padding: 8px 16px; font-size: 0.85rem;">Quitar Sello</button>
+            </div>
+          </div>
+
+          <div style="margin-top: 35px; border-top: 1.5px solid var(--surface-border); padding-top: 20px; display: flex; justify-content: flex-end;">
+            <button type="submit" class="btn">Aplicar Mágicamente</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- PESTAÑA 2: GESTIONAR AVENTUREROS -->
+    <section class="tab-pane" id="tab-users">
+      <div class="user-management-grid">
+        
+        <!-- Crear Nuevo Usuario -->
+        <div class="card-glass">
+          <h3 style="font-family: 'Cinzel', serif; color: var(--secondary); margin-bottom: 20px; border-bottom: 1.5px solid var(--surface-border); padding-bottom: 8px;">Alistar Aventurero</h3>
+          
+          <form id="create-user-form">
+            <div class="form-group">
+              <label for="new-username">Nombre de Aventurero</label>
+              <input type="text" id="new-username" class="form-control" placeholder="Ej. Drizzt123" required autocomplete="off">
+            </div>
+            
+            <div class="form-group">
+              <label for="new-password">Contraseña de Acceso</label>
+              <input type="password" id="new-password" class="form-control" placeholder="••••••••" required autocomplete="new-password">
+            </div>
+            
+            <div class="form-group">
+              <label for="new-role">Rango del Gremio (Rol)</label>
+              <select id="new-role" class="form-control" style="cursor: pointer;">
+                <option value="user" selected>Aventurero Registrado (Solo sus crónicas)</option>
+                <option value="admin">Administrador (Control absoluto)</option>
+              </select>
+            </div>
+            
+            <button type="submit" class="btn" style="width: 100%; margin-top: 15px;">Inscribir Héroe</button>
+          </form>
+        </div>
+        
+        <!-- Listado de Usuarios -->
+        <div class="card-glass" style="display: flex; flex-direction: column;">
+          <h3 style="font-family: 'Cinzel', serif; color: var(--secondary); margin-bottom: 20px; border-bottom: 1.5px solid var(--surface-border); padding-bottom: 8px;">Aventureros Registrados</h3>
+          
+          <div class="users-list-wrapper" id="users-list-container">
+            <!-- Cargado dinámicamente con JS -->
+            <div style="padding: 30px; text-align: center; color: var(--text-muted);">
+              Cargando fichas de jugadores...
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <div class="notification-container" id="notification-container"></div>
+
+  <footer>
+    <p>&copy; 2026 Gremio de Héroes D&D. Archivo Místico Privado.</p>
+  </footer>
+
+  <script src="/html/js/auth.js"></script>
+  <script src="/html/js/admin.js"></script>
+</body>
+</html>
