@@ -1,0 +1,315 @@
+/* --- D&D SESSIONS SPECIFIC STYLES --- */
+
+.panel-section-title {
+  font-family: 'Cinzel', serif;
+  color: var(--secondary);
+  font-size: 1.25rem;
+  letter-spacing: 1px;
+  margin-bottom: 15px;
+}
+
+[data-theme="tavern_parchment"] .panel-section-title {
+  color: var(--primary);
+}
+
+/* DM Dashboard layout grid */
+.dm-dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 30px;
+}
+
+@media (max-width: 992px) {
+  .dm-dashboard-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+
+/* Sessions list for DM */
+.sessions-list-wrapper {
+  max-height: 380px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 5px;
+}
+
+.dm-session-item {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dm-session-item:hover, .dm-session-item.active {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--secondary);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+[data-theme="tavern_parchment"] .dm-session-item:hover, 
+[data-theme="tavern_parchment"] .dm-session-item.active {
+  background: rgba(139, 69, 19, 0.03);
+  border-color: var(--primary);
+}
+
+.dm-session-info h4 {
+  font-family: 'Cinzel', serif;
+  color: #fff;
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+
+[data-theme="tavern_parchment"] .dm-session-info h4 {
+  color: var(--primary);
+}
+
+.dm-session-info p {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Community Sessions Grid */
+.community-sessions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 25px;
+}
+
+.session-card {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+}
+
+.session-card-header {
+  border-bottom: 1px solid var(--surface-border);
+  padding-bottom: 12px;
+  margin-bottom: 15px;
+}
+
+.session-card-title {
+  font-family: 'Cinzel', serif;
+  font-size: 1.25rem;
+  color: #fff;
+  margin-bottom: 6px;
+}
+
+[data-theme="tavern_parchment"] .session-card-title {
+  color: var(--primary);
+}
+
+.session-card-creator {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: 'Cinzel', serif;
+}
+
+.session-card-body {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin-bottom: 20px;
+  flex-grow: 1;
+}
+
+.session-card-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: stretch;
+}
+
+[data-theme="tavern_parchment"] .session-card-footer {
+  border-top-color: rgba(139, 69, 19, 0.05);
+}
+
+.session-card-joined-counter {
+  font-size: 0.8rem;
+  color: var(--secondary);
+  font-family: 'Cinzel', serif;
+  font-weight: bold;
+}
+
+[data-theme="tavern_parchment"] .session-card-joined-counter {
+  color: var(--text-muted);
+}
+
+/* Assigned players inspect panel (DMs) */
+.dm-inspect-panel {
+  margin-top: 20px;
+  border-top: 1.5px solid var(--surface-border);
+  padding-top: 20px;
+}
+
+.inspect-characters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  margin-top: 15px;
+}
+
+.inspect-char-card {
+  padding: 16px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.inspect-char-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+}
+
+.inspect-char-avatar {
+  width: 55px;
+  height: 55px;
+  border-radius: 50%;
+  border: 2px solid var(--secondary);
+  object-fit: cover;
+}
+
+.inspect-char-info h5 {
+  color: #fff;
+  font-size: 0.95rem;
+  margin-bottom: 2px;
+}
+
+[data-theme="tavern_parchment"] .inspect-char-info h5 {
+  color: var(--primary);
+}
+
+.inspect-char-info p {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Inspect attributes box modal styles */
+.inspect-modal-grid {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 25px;
+}
+
+@media (max-width: 768px) {
+  .inspect-modal-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- PREMIUM INTERACTIVE TOUCHES & MICRO-ANIMATIONS --- */
+
+/* Scrollbar mística personalizada para listas de sesiones */
+.sessions-list-wrapper::-webkit-scrollbar,
+.modal-desc::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sessions-list-wrapper::-webkit-scrollbar-track,
+.modal-desc::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.sessions-list-wrapper::-webkit-scrollbar-thumb,
+.modal-desc::-webkit-scrollbar-thumb {
+  background: var(--secondary);
+  border-radius: 4px;
+}
+
+.sessions-list-wrapper::-webkit-scrollbar-thumb:hover,
+.modal-desc::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+/* Efectos de realce y elevación en las tarjetas de campaña */
+.session-card {
+  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.session-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--secondary);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), 0 0 15px var(--secondary-glow);
+}
+
+[data-theme="tavern_parchment"] .session-card:hover {
+  border-color: var(--primary);
+  box-shadow: 0 8px 20px rgba(139, 69, 19, 0.15);
+}
+
+/* Brillo táctil y foco en selectores y campos de formulario */
+.form-control:focus, 
+.join-char-select:focus {
+  border-color: var(--secondary);
+  box-shadow: 0 0 12px var(--secondary-glow) !important;
+  outline: none;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="tavern_parchment"] .form-control:focus,
+[data-theme="tavern_parchment"] .join-char-select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 8px rgba(139, 69, 19, 0.2) !important;
+  background: #fff;
+}
+
+/* Micro-animaciones en botones táctiles */
+.btn:hover, 
+.join-session-btn:hover {
+  transform: translateY(-1.5px);
+  box-shadow: 0 0 12px var(--secondary-glow);
+  filter: brightness(1.1);
+}
+
+.btn-secondary:hover {
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
+}
+
+.btn-danger:hover {
+  box-shadow: 0 0 12px rgba(226, 62, 62, 0.4);
+}
+
+/* Decoración decorativa medieval para los títulos de sección */
+.brand-decorative {
+  position: relative;
+  display: inline-block;
+  padding-bottom: 8px;
+}
+
+.brand-decorative::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 40px;
+  height: 2px;
+  background: var(--secondary);
+  transition: width 0.3s ease;
+}
+
+.card-glass:hover .brand-decorative::after {
+  width: 70px;
+}
+
+[data-theme="tavern_parchment"] .brand-decorative::after {
+  background: var(--primary);
+}
+

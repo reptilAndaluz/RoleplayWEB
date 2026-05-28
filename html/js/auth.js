@@ -10,7 +10,30 @@ const Auth = {
 
   getUserInfo() {
     const userStr = localStorage.getItem(this.USER_KEY);
-    return userStr ? JSON.parse(userStr) : null;
+    if (!userStr) return null;
+    const user = JSON.parse(userStr);
+    
+    // Fallback: Si no tiene ID en localStorage, decodificarlo desde el token JWT
+    if (user && !user.id) {
+      const token = this.getToken();
+      if (token) {
+        try {
+          const base64Url = token.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+              return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+          }).join(''));
+          const payload = JSON.parse(jsonPayload);
+          if (payload && payload.user_id) {
+            user.id = payload.user_id;
+            localStorage.setItem(this.USER_KEY, JSON.stringify(user));
+          }
+        } catch (e) {
+          console.error("Error al decodificar token JWT:", e);
+        }
+      }
+    }
+    return user;
   },
 
   isLoggedIn() {
@@ -20,6 +43,11 @@ const Auth = {
   isAdmin() {
     const user = this.getUserInfo();
     return user && user.role === "admin";
+  },
+
+  isDM() {
+    const user = this.getUserInfo();
+    return user && (user.role === "dm" || user.role === "admin");
   },
 
   async login(username, password) {
@@ -45,6 +73,7 @@ const Auth = {
       localStorage.setItem(
         this.USER_KEY,
         JSON.stringify({
+          id: data.id,
           username: data.username,
           role: data.role,
         })

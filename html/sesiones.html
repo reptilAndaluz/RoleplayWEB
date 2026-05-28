@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dragons_lair">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gremio de Héroes D&D - Sesiones de Juego</title>
+  <!-- SEO -->
+  <meta name="description" content="Gestiona y únete a sesiones de juego en el Gremio de Héroes D&D. Los Dungeon Masters pueden ver y monitorizar las fichas asignadas a la partida.">
+  <link rel="stylesheet" href="/html/css/styles.css">
+  <link rel="stylesheet" href="/html/css/portal.css">
+  <link rel="stylesheet" href="/html/css/forms.css">
+  <link rel="stylesheet" href="/html/css/sesiones.css">
+  <!-- Script de carga rápida del Tema -->
+  <script>
+    (async function() {
+      try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+          const config = await response.json();
+          if (config.tema) {
+            document.documentElement.setAttribute('data-theme', config.tema);
+            if (config.titulo) {
+              document.title = config.titulo + " - Sesiones de Juego";
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Error al cargar la configuración:", e);
+      }
+    })();
+  </script>
+</head>
+<body>
+
+  <!-- Cabecera Mística -->
+  <header>
+    <div class="nav-container">
+      <a href="/html/portal.html" class="logo-section">
+        <svg class="logo-icon" viewBox="0 0 100 100" id="header-logo">
+          <polygon points="50,5 90,25 90,75 50,95 10,75 10,25" fill="none" stroke="var(--secondary)" stroke-width="2.5"/>
+          <polygon points="50,5 50,95" fill="none" stroke="var(--secondary)" stroke-width="1.2"/>
+          <polygon points="10,25 90,25" fill="none" stroke="var(--secondary)" stroke-width="1.2"/>
+          <polygon points="10,75 90,75" fill="none" stroke="var(--secondary)" stroke-width="1.2"/>
+          <circle cx="50" cy="50" r="14" fill="var(--bg)" stroke="var(--primary)" stroke-width="1.5"/>
+          <text x="50" y="54" font-family="'Cinzel', serif" font-weight="bold" font-size="12" fill="var(--text)" text-anchor="middle">20</text>
+        </svg>
+        <span class="site-title" id="site-title-text">Gremio de Héroes</span>
+      </a>
+      
+      <ul class="nav-menu">
+        <li><a href="/html/portal.html" class="nav-link">Crónicas</a></li>
+        <li><a href="/html/sesiones.html" class="nav-link active">Sesiones D&D</a></li>
+        <li><a href="/html/crearEntrada.html" class="nav-link">Crear Héroe</a></li>
+        <li id="admin-nav-item" style="display: none;"><a href="/html/admin.html" class="nav-link">Personalizar</a></li>
+        <li><button id="logout-btn" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;">Salir</button></li>
+      </ul>
+    </div>
+  </header>
+
+  <!-- Contenedor del Portal -->
+  <main class="portal-container">
+    
+    <!-- Título de Bienvenida -->
+    <section class="toolbar-section">
+      <div class="action-bar">
+        <div class="user-welcome-title">
+          <h2>Sesiones de Juego D&D</h2>
+          <p>Coordina tus partidas y reúne a los héroes del gremio bajo una misma campaña mística.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ÁREA DE DUNGEON MASTER (Oculta por defecto, habilitada por JS) -->
+    <section id="dm-dashboard-section" class="dm-dashboard-grid" style="display: none; margin-bottom: 45px;">
+      
+      <!-- Fundar Sesión -->
+      <div class="card-glass" style="padding: 24px;">
+        <h3 class="panel-section-title brand-decorative">Fundar Nueva Sesión</h3>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 15px;">Como Dungeon Master, puedes iniciar una sesión para congregar héroes.</p>
+        
+        <form id="create-session-form">
+          <div class="form-group">
+            <label for="sess-nombre">Nombre de la Campaña / Sesión</label>
+            <input type="text" id="sess-nombre" class="form-control" placeholder="Ej. El Templo del Mal Elemental" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="sess-desc">Descripción / Instrucciones</label>
+            <textarea id="sess-desc" class="form-control" rows="3" placeholder="Ej. Campaña para niveles 4-6. Buscamos un clérigo y un pícaro..." required></textarea>
+          </div>
+          
+          <button type="submit" class="btn" style="width: 100%; margin-top: 10px;">Fundar Sesión Mística</button>
+        </form>
+      </div>
+
+      <!-- Tus Sesiones e Inspección -->
+      <div class="card-glass" style="padding: 24px; display: flex; flex-direction: column;">
+        <h3 class="panel-section-title brand-decorative">Tus Sesiones Activas</h3>
+        
+        <div class="sessions-list-wrapper" id="dm-sessions-list">
+          <div style="padding: 30px; text-align: center; color: var(--text-muted);">
+            No tienes ninguna sesión mística activa en este plano.
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- LISTADO DE SESIONES Y PARTICIPACIÓN (Para todos) -->
+    <section class="card-glass" style="padding: 30px; margin-bottom: 40px;">
+      <h3 class="panel-section-title brand-decorative" style="border-bottom: 1.5px solid var(--surface-border); padding-bottom: 10px;">Campañas de la Comunidad</h3>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 25px;">Une tus héroes creados a las partidas organizadas por los Dungeon Masters del gremio.</p>
+      
+      <div class="community-sessions-grid" id="community-sessions-grid">
+        <div style="grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--text-muted);">
+          Buscando sesiones activas en el archivo...
+        </div>
+      </div>
+    </section>
+
+    <!-- MODAL DE INSPECCIÓN DETALLADA DE PERSONAJES DE LA SESIÓN -->
+    <div class="modal" id="character-detail-modal">
+      <div class="modal-content card-glass" style="position: relative;">
+        <span class="modal-close" id="modal-detail-close">&times;</span>
+        <div id="modal-detail-body">
+          <!-- Inyectado dinámicamente con JS -->
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <div class="notification-container" id="notification-container"></div>
+
+  <footer>
+    <p>&copy; 2026 Gremio de Héroes D&D. Archivo Místico Privado.</p>
+  </footer>
+
+  <script src="/html/js/auth.js"></script>
+  <script src="/html/js/theme.js"></script>
+  <script src="/html/js/sesiones.js"></script>
+</body>
+</html>

@@ -92,12 +92,13 @@ if not SECRET_KEY:
 USERS_FILE = os.path.join(DATA_DIR, "usuarios.json")
 CHARACTERS_FILE = os.path.join(DATA_DIR, "personajes.json")
 CONFIG_FILE = os.path.join(DATA_DIR, "config.json")
+SESSIONS_FILE = os.path.join(DATA_DIR, "sesiones.json")
 
 # Copiar archivos JSON locales a /tmp/data en Vercel si existen
 if IS_VERCEL:
     import shutil
     ORIG_DATA_DIR = os.path.join(BASE_DIR, "data")
-    for filename in ["usuarios.json", "personajes.json", "config.json"]:
+    for filename in ["usuarios.json", "personajes.json", "config.json", "sesiones.json"]:
         orig_path = os.path.join(ORIG_DATA_DIR, filename)
         tmp_path = os.path.join(DATA_DIR, filename)
         if not os.path.exists(tmp_path) and os.path.exists(orig_path):
@@ -234,6 +235,18 @@ def read_json_file(filepath: str, default_value: Union[list, dict]) -> Union[lis
                     except Exception:
                         pass
                 return doc if doc is not None else default_value
+            elif "sesiones.json" in filepath:
+                res = list(mongo_db.sesiones.find({}, {"_id": 0}))
+                if not res and os.path.exists(filepath):
+                    try:
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            local_data = json.load(f)
+                            if local_data:
+                                mongo_db.sesiones.insert_many(local_data)
+                                return local_data
+                    except Exception:
+                        pass
+                return res
         except Exception as e:
             print(f"⚠️ Error al leer de MongoDB: {e}. Cayendo a copia local.")
 
@@ -276,6 +289,11 @@ def write_json_file(filepath: str, data: Union[list, dict]):
                 mongo_db.config.delete_many({})
                 if data:
                     mongo_db.config.insert_one(data)
+                return
+            elif "sesiones.json" in filepath:
+                mongo_db.sesiones.delete_many({})
+                if data:
+                    mongo_db.sesiones.insert_many(data)
                 return
         except Exception as e:
             print(f"⚠️ Error al escribir en MongoDB: {e}. Escribiendo copia en archivo local.")
@@ -333,6 +351,11 @@ def init_db():
     if chars is None:
         write_json_file(CHARACTERS_FILE, [])
 
+    # 4. Sesiones por defecto
+    sesiones = read_json_file(SESSIONS_FILE, None)
+    if sesiones is None:
+        write_json_file(SESSIONS_FILE, [])
+
 init_db()
 
 # --- AUTENTICACIÓN JWT ---
@@ -384,6 +407,11 @@ def get_admin_user(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Acceso denegado. Se requieren permisos de administrador.")
     return current_user
 
+def get_dm_user(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["dm", "admin"]:
+        raise HTTPException(status_code=403, detail="Acceso denegado. Se requieren permisos de Dungeon Master o Administrador.")
+    return current_user
+
 # --- MODELOS PYDANTIC ---
 class LoginRequest(BaseModel):
     username: str
@@ -392,13 +420,29 @@ class LoginRequest(BaseModel):
 class UserCreate(BaseModel):
     username: str
     password: str
-    role: str  # 'user' o 'admin'
+    role: str  # 'user', 'dm' o 'admin'
 
 class UserResponse(BaseModel):
     id: str
     username: str
     role: str
     created_at: str
+
+class SessionCreate(BaseModel):
+    nombre: str
+    descripcion: str
+
+class SessionResponse(BaseModel):
+    id: str
+    nombre: str
+    descripcion: str
+    dm_id: str
+    dm_username: str
+    created_at: str
+    personajes: List[str]
+    joined_characters_count: int
+    user_joined: bool
+
 
 class ConfigUpdate(BaseModel):
     titulo: str
@@ -437,6 +481,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
                 return {
                     "access_token": access_token,
                     "token_type": "bearer",
+                    "id": u["id"],
                     "role": u["role"],
                     "username": u["username"]
                 }
@@ -506,8 +551,8 @@ async def create_user(payload: UserCreate, admin: dict = Depends(get_admin_user)
     if any(u["username"].lower() == payload.username.lower() for u in usuarios):
         raise HTTPException(status_code=400, detail="El nombre de usuario ya está registrado.")
         
-    if payload.role not in ["user", "admin"]:
-        raise HTTPException(status_code=400, detail="Rol inválido. Debe ser 'user' o 'admin'.")
+    if payload.role not in ["user", "dm", "admin"]:
+        raise HTTPException(status_code=400, detail="Rol inválido. Debe ser 'user', 'dm' o 'admin'.")
         
     new_user = {
         "id": f"usr_{uuid.uuid4().hex[:8]}",
@@ -548,15 +593,15 @@ async def delete_user(user_id: str, admin: dict = Depends(get_admin_user)):
     return {"status": "success", "message": "Usuario y sus héroes asociados eliminados con éxito"}
 
 class RoleUpdateRequest(BaseModel):
-    role: str  # 'user' o 'admin'
+    role: str  # 'user', 'dm' o 'admin'
 
 @app.put("/api/admin/usuarios/{user_id}/role")
 async def update_user_role(user_id: str, payload: RoleUpdateRequest, admin: dict = Depends(get_admin_user)):
     if user_id == admin["id"]:
         raise HTTPException(status_code=400, detail="No puedes alterar tu propio rango, sabio líder.")
         
-    if payload.role not in ["user", "admin"]:
-        raise HTTPException(status_code=400, detail="Rango no permitido. Debe ser 'user' o 'admin'.")
+    if payload.role not in ["user", "dm", "admin"]:
+        raise HTTPException(status_code=400, detail="Rango no permitido. Debe ser 'user', 'dm' o 'admin'.")
         
     usuarios = read_json_file(USERS_FILE, [])
     found = False
@@ -578,19 +623,28 @@ async def update_user_role(user_id: str, payload: RoleUpdateRequest, admin: dict
 async def list_characters(user: dict = Depends(get_current_user)):
     personajes = read_json_file(CHARACTERS_FILE, [])
     
-    # Si es admin, puede ver todo. Si es usuario regular, solo sus propios personajes.
-    if user["role"] == "admin":
-        return personajes
-    else:
-        return [p for p in personajes if p.get("user_id") == user["id"]]
+    # En la página principal, todos los usuarios (incluyendo admin y dm)
+    # solo ven sus propios personajes para mantener su panel limpio.
+    return [p for p in personajes if p.get("user_id") == user["id"]]
 
 @app.get("/api/personajes/{char_id}", response_model=CharacterModel)
 async def get_character(char_id: str, user: dict = Depends(get_current_user)):
     personajes = read_json_file(CHARACTERS_FILE, [])
     for p in personajes:
         if p["id"] == char_id:
-            # Control de acceso
-            if user["role"] != "admin" and p.get("user_id") != user["id"]:
+            # Control de acceso: Permitir al propietario, al admin supremo, 
+            # o al Dungeon Master de una sesión donde se haya alistado este personaje.
+            is_owner = p.get("user_id") == user["id"]
+            is_admin = user["role"] == "admin"
+            
+            is_dm_of_char_session = False
+            sesiones = read_json_file(SESSIONS_FILE, [])
+            for s in sesiones:
+                if s.get("dm_id") == user["id"] and char_id in s.get("personajes", []):
+                    is_dm_of_char_session = True
+                    break
+                    
+            if not is_owner and not is_admin and not is_dm_of_char_session:
                 raise HTTPException(status_code=403, detail="No tienes derecho a ver este registro mágico.")
             return p
     raise HTTPException(status_code=404, detail="Personaje no encontrado en las crónicas.")
@@ -659,6 +713,180 @@ async def delete_character(char_id: str, user: dict = Depends(get_current_user))
         
     write_json_file(CHARACTERS_FILE, filtered)
     return {"status": "success", "message": "Ficha borrada exitosamente del gremio"}
+
+# --- RUTAS DE SESIONES DE D&D ---
+@app.get("/api/sesiones", response_model=List[SessionResponse])
+async def list_sessions(user: dict = Depends(get_current_user)):
+    sesiones = read_json_file(SESSIONS_FILE, [])
+    personajes = read_json_file(CHARACTERS_FILE, [])
+    
+    # Obtener los IDs de personajes que pertenecen al usuario actual
+    user_char_ids = {p["id"] for p in personajes if p.get("user_id") == user["id"]}
+    
+    response = []
+    for s in sesiones:
+        joined_chars = s.get("personajes", [])
+        joined_count = len(joined_chars)
+        has_joined = any(cid in user_char_ids for cid in joined_chars)
+        
+        response.append({
+            "id": s["id"],
+            "nombre": s["nombre"],
+            "descripcion": s["descripcion"],
+            "dm_id": s["dm_id"],
+            "dm_username": s["dm_username"],
+            "created_at": s["created_at"],
+            "personajes": joined_chars,
+            "joined_characters_count": joined_count,
+            "user_joined": has_joined
+        })
+    return response
+
+@app.post("/api/sesiones", response_model=SessionResponse)
+async def create_session(payload: SessionCreate, dm: dict = Depends(get_dm_user)):
+    sesiones = read_json_file(SESSIONS_FILE, [])
+    
+    new_sess = {
+        "id": f"sess_{uuid.uuid4().hex[:8]}",
+        "nombre": payload.nombre.strip(),
+        "descripcion": payload.descripcion.strip(),
+        "dm_id": dm["id"],
+        "dm_username": dm["username"],
+        "created_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "personajes": []
+    }
+    
+    if not new_sess["nombre"]:
+        raise HTTPException(status_code=400, detail="El nombre de la sesión no puede estar vacío.")
+        
+    sesiones.append(new_sess)
+    write_json_file(SESSIONS_FILE, sesiones)
+    
+    return {
+        **new_sess,
+        "joined_characters_count": 0,
+        "user_joined": False
+    }
+
+@app.delete("/api/sesiones/{session_id}")
+async def delete_session(session_id: str, dm: dict = Depends(get_dm_user)):
+    sesiones = read_json_file(SESSIONS_FILE, [])
+    filtered = []
+    found = False
+    
+    for s in sesiones:
+        if s["id"] == session_id:
+            if dm["role"] != "admin" and s.get("dm_id") != dm["id"]:
+                raise HTTPException(status_code=403, detail="No tienes derecho a disolver esta sesión mágica.")
+            found = True
+        else:
+            filtered.append(s)
+            
+    if not found:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada.")
+        
+    write_json_file(SESSIONS_FILE, filtered)
+    return {"status": "success", "message": "Sesión de juego disuelta con éxito."}
+
+@app.post("/api/sesiones/{session_id}/personajes/{char_id}")
+async def join_session(session_id: str, char_id: str, user: dict = Depends(get_current_user)):
+    sesiones = read_json_file(SESSIONS_FILE, [])
+    personajes = read_json_file(CHARACTERS_FILE, [])
+    
+    character = None
+    for p in personajes:
+        if p["id"] == char_id:
+            character = p
+            break
+            
+    if not character:
+        raise HTTPException(status_code=404, detail="El personaje no existe.")
+        
+    if character.get("user_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="No eres el propietario de esta ficha de personaje.")
+        
+    found = False
+    for s in sesiones:
+        if s["id"] == session_id:
+            found = True
+            if "personajes" not in s:
+                s["personajes"] = []
+            if char_id not in s["personajes"]:
+                s["personajes"].append(char_id)
+            break
+            
+    if not found:
+        raise HTTPException(status_code=404, detail="Sesión de juego no encontrada.")
+        
+    write_json_file(SESSIONS_FILE, sesiones)
+    return {"status": "success", "message": f"{character['nombre']} se ha unido a la sesión con éxito."}
+
+@app.delete("/api/sesiones/{session_id}/personajes/{char_id}")
+async def leave_session(session_id: str, char_id: str, user: dict = Depends(get_current_user)):
+    sesiones = read_json_file(SESSIONS_FILE, [])
+    personajes = read_json_file(CHARACTERS_FILE, [])
+    
+    session = None
+    for s in sesiones:
+        if s["id"] == session_id:
+            session = s
+            break
+            
+    if not session:
+        raise HTTPException(status_code=404, detail="Sesión de juego no encontrada.")
+        
+    character = None
+    for p in personajes:
+        if p["id"] == char_id:
+            character = p
+            break
+            
+    is_owner = character and character.get("user_id") == user["id"]
+    is_dm_or_admin = (user["role"] == "admin" or session.get("dm_id") == user["id"])
+    
+    if not is_owner and not is_dm_or_admin:
+        raise HTTPException(status_code=403, detail="No tienes permisos para retirar a este personaje de la sesión.")
+        
+    if "personajes" in session and char_id in session["personajes"]:
+        session["personajes"].remove(char_id)
+        
+    write_json_file(SESSIONS_FILE, sesiones)
+    
+    char_name = character["nombre"] if character else "El personaje"
+    return {"status": "success", "message": f"{char_name} ha sido retirado de la sesión."}
+
+@app.get("/api/sesiones/{session_id}/personajes")
+async def get_session_characters(session_id: str, user: dict = Depends(get_current_user)):
+    sesiones = read_json_file(SESSIONS_FILE, [])
+    personajes = read_json_file(CHARACTERS_FILE, [])
+    usuarios = read_json_file(USERS_FILE, [])
+    
+    # Mapear IDs de usuario a sus nombres de usuario correspondientes
+    user_map = {u["id"]: u["username"] for u in usuarios}
+    
+    session = None
+    for s in sesiones:
+        if s["id"] == session_id:
+            session = s
+            break
+            
+    if not session:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada.")
+        
+    if user["role"] != "admin" and session.get("dm_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="No tienes derecho a inspeccionar las fichas de esta sesión.")
+        
+    session_char_ids = set(session.get("personajes", []))
+    
+    # Crear listado enriquecido con el nombre del creador/propietario del personaje
+    session_characters = []
+    for p in personajes:
+        if p["id"] in session_char_ids:
+            p_copy = dict(p)
+            p_copy["owner_username"] = user_map.get(p.get("user_id"), "Desconocido")
+            session_characters.append(p_copy)
+            
+    return session_characters
 
 # --- RUTA PARA SUBIR IMÁGENES (AVATARS Y GALERÍA MULTIPART) ---
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}

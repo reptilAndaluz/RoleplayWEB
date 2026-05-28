@@ -251,6 +251,7 @@ async function loadUsersList() {
         actionsHtml = `
           <select class="form-control" style="width: auto; padding: 4px 8px; font-size: 0.75rem; height: auto; display: inline-block; margin-right: 10px; cursor: pointer; background: rgba(0,0,0,0.3); border-color: var(--surface-border); color: var(--text);" onchange="changeUserRole('${u.id}', this.value, '${u.username}')">
             <option value="user" ${u.role === 'user' ? 'selected' : ''}>Aventurero</option>
+            <option value="dm" ${u.role === 'dm' ? 'selected' : ''}>Dungeon Master</option>
             <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Administrador</option>
           </select>
           <button class="btn btn-danger" style="padding: 6px 12px; font-size: 0.75rem;" onclick="confirmDeleteUser('${u.id}', '${u.username}')">Abolir</button>
@@ -359,7 +360,10 @@ window.changeUserRole = async function(userId, newRole, username) {
       throw new Error(errorData.detail || "Error al cambiar rango");
     }
 
-    Auth.showToast(`El rango de ${username} ha sido cambiado a ${newRole === 'admin' ? 'Administrador' : 'Aventurero'}.`, "success");
+    let roleText = 'Aventurero';
+    if (newRole === 'admin') roleText = 'Administrador';
+    else if (newRole === 'dm') roleText = 'Dungeon Master';
+    Auth.showToast(`El rango de ${username} ha sido cambiado a ${roleText}.`, "success");
     await loadUsersList();
   } catch (e) {
     console.error(e);
