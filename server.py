@@ -19,7 +19,6 @@ import time
 import tempfile
 
 # Configuración de Seguridad
-SECRET_KEY = os.environ.get("SECRET_KEY", "dnd_catalogo_secret_key_revelation_99_magic")
 ALGORITHM = "HS256"
 
 app = FastAPI(title="Catálogo de Personajes D&D")
@@ -70,6 +69,25 @@ else:
     DATA_DIR = os.path.join(BASE_DIR, "data")
 
 os.makedirs(DATA_DIR, exist_ok=True)
+
+# Cargar o generar SECRET_KEY criptográficamente segura de forma persistente y secreta
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    secret_key_file = os.path.join(DATA_DIR, ".secret_key")
+    if os.path.exists(secret_key_file):
+        try:
+            with open(secret_key_file, "r", encoding="utf-8") as f:
+                SECRET_KEY = f.read().strip()
+        except Exception:
+            pass
+    if not SECRET_KEY:
+        import secrets
+        SECRET_KEY = secrets.token_hex(32)
+        try:
+            with open(secret_key_file, "w", encoding="utf-8") as f:
+                f.write(SECRET_KEY)
+        except Exception:
+            pass
 
 USERS_FILE = os.path.join(DATA_DIR, "usuarios.json")
 CHARACTERS_FILE = os.path.join(DATA_DIR, "personajes.json")
@@ -408,11 +426,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     for u in usuarios:
         if u["username"].lower() == form_data.username.lower():
             if verify_password(form_data.password, u["password_hash"]):
-                # Crear token
+                # Crear token con expiración de 7 días
                 token_data = {
                     "sub": u["username"],
                     "role": u["role"],
-                    "user_id": u["id"]
+                    "user_id": u["id"],
+                    "exp": datetime.utcnow() + timedelta(days=7)
                 }
                 access_token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
                 return {
