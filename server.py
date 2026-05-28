@@ -61,12 +61,32 @@ def verify_password(password: str, stored_hash: str) -> bool:
         return False
 
 # --- PERSISTENCIA EN ARCHIVOS JSON ---
-DATA_DIR = "data"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+IS_VERCEL = "VERCEL" in os.environ
+
+if IS_VERCEL:
+    DATA_DIR = "/tmp/data"
+else:
+    DATA_DIR = os.path.join(BASE_DIR, "data")
+
 os.makedirs(DATA_DIR, exist_ok=True)
 
 USERS_FILE = os.path.join(DATA_DIR, "usuarios.json")
 CHARACTERS_FILE = os.path.join(DATA_DIR, "personajes.json")
 CONFIG_FILE = os.path.join(DATA_DIR, "config.json")
+
+# Copiar archivos JSON locales a /tmp/data en Vercel si existen
+if IS_VERCEL:
+    import shutil
+    ORIG_DATA_DIR = os.path.join(BASE_DIR, "data")
+    for filename in ["usuarios.json", "personajes.json", "config.json"]:
+        orig_path = os.path.join(ORIG_DATA_DIR, filename)
+        tmp_path = os.path.join(DATA_DIR, filename)
+        if not os.path.exists(tmp_path) and os.path.exists(orig_path):
+            try:
+                shutil.copy2(orig_path, tmp_path)
+            except Exception:
+                pass
 
 def read_json_file(filepath: str, default_value: Union[list, dict]) -> Union[list, dict]:
     if os.path.exists(filepath):
@@ -425,8 +445,13 @@ async def delete_character(char_id: str, user: dict = Depends(get_current_user))
 
 # --- RUTA PARA SUBIR IMÁGENES (AVATARS Y GALERÍA MULTIPART) ---
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
-AVATARS_DIR = os.path.join("html", "img", "uploads", "avatars")
-GALLERIES_DIR = os.path.join("html", "img", "uploads", "galleries")
+
+if IS_VERCEL:
+    AVATARS_DIR = "/tmp/uploads/avatars"
+    GALLERIES_DIR = "/tmp/uploads/galleries"
+else:
+    AVATARS_DIR = os.path.join(BASE_DIR, "html", "img", "uploads", "avatars")
+    GALLERIES_DIR = os.path.join(BASE_DIR, "html", "img", "uploads", "galleries")
 
 os.makedirs(AVATARS_DIR, exist_ok=True)
 os.makedirs(GALLERIES_DIR, exist_ok=True)
@@ -663,12 +688,55 @@ async def import_characters(file: UploadFile = File(...), user: dict = Depends(g
         "count": importados
     }
 
+# --- SERVIDOR DE IMÁGENES TEMPORALES (SOLO PARA VERCEL) ---
+@app.get("/html/img/uploads/avatars/{filename}")
+async def get_uploaded_avatar(filename: str):
+    file_path = os.path.join(AVATARS_DIR, filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    fallback_path = os.path.join(BASE_DIR, "html", "img", "uploads", "avatars", filename)
+    if os.path.exists(fallback_path):
+        return FileResponse(fallback_path)
+    raise HTTPException(status_code=404, detail="Imagen no encontrada")
+
+@app.get("/html/img/uploads/galleries/{filename}")
+async def get_uploaded_gallery(filename: str):
+    file_path = os.path.join(GALLERIES_DIR, filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    fallback_path = os.path.join(BASE_DIR, "html", "img", "uploads", "galleries", filename)
+    if os.path.exists(fallback_path):
+        return FileResponse(fallback_path)
+    raise HTTPException(status_code=404, detail="Imagen no encontrada")
+
 # --- SERVIDOR DE ARCHIVOS ESTÁTICOS ---
-app.mount("/html", StaticFiles(directory="html"), name="html")
+HTML_DIR = os.path.join(BASE_DIR, "html")
+app.mount("/html", StaticFiles(directory=HTML_DIR), name="html")
 
 @app.get("/")
 async def root():
     return RedirectResponse(url="/html/index.html")
 
-# Comando para ejecutar (desarrollo):
-# python -m uvicorn server:app --reload --port 8080
+if __name__ == "__main__":
+    import uvicorn
+    print("\n Iniciando el Portal del Gremio de Héroes D&D...")
+    ssl_key = os.path.join(BASE_DIR, "key.pem")
+    ssl_cert = os.path.join(BASE_DIR, "cert.pem")
+    if os.path.exists(ssl_key) and os.path.exists(ssl_cert):
+        print("Accede en: https://127.0.0.1:8081 (Conexion Segura HTTPS)\n")
+        uvicorn.run(
+            "server:app",
+            host="127.0.0.1",
+            port=8081,
+            reload=True,
+            ssl_keyfile=ssl_key,
+            ssl_certfile=ssl_cert
+        )
+    else:
+        print("Accede en: http://127.0.0.1:8081 (Conexion Estandar HTTP)\n")
+        uvicorn.run(
+            "server:app",
+            host="127.0.0.1",
+            port=8081,
+            reload=True
+        )

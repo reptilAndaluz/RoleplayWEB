@@ -45,14 +45,14 @@ Esta guía detalla los pasos necesarios para desplegar el **Portal del Gremio de
 5. **Iniciar el servidor local**:
    * **Con HTTPS (Recomendado)**:
      ```bash
-     python -m uvicorn server:app --reload --port 8080 --host 127.0.0.1 --ssl-keyfile=key.pem --ssl-certfile=cert.pem
+     python -m uvicorn server:app --reload --port 8081 --host 127.0.0.1 --ssl-keyfile=key.pem --ssl-certfile=cert.pem
      ```
    * **Con HTTP estándar**:
      ```bash
-     python -m uvicorn server:app --reload --port 8080 --host 127.0.0.1
+     python -m uvicorn server:app --reload --port 8081 --host 127.0.0.1
      ```
 
-6. **Verificación**: Abre en tu navegador `https://127.0.0.1:8080` (acepta el riesgo de seguridad del certificado autofirmado) o `http://127.0.0.1:8080`.
+6. **Verificación**: Abre en tu navegador `https://127.0.0.1:8081` (acepta el riesgo de seguridad del certificado autofirmado) o `http://127.0.0.1:8081`.
 
 ---
 

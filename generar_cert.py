@@ -58,5 +58,5 @@ if not os.path.exists(cert_file) or not os.path.exists(key_file):
 else:
     print("✅ Los certificados ya existen.")
 
-print("\nPara iniciar el servidor con SSL, ejecuta:")
-print("python -m uvicorn server:app --reload --port 8080 --ssl-keyfile=key.pem --ssl-certfile=cert.pem")
+print("\nPara iniciar el servidor con SSL en puerto 8081 (evita conflictos de sesión), ejecuta:")
+print("python -m uvicorn server:app --reload --port 8081 --ssl-keyfile=key.pem --ssl-certfile=cert.pem")
