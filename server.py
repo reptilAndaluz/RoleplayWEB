@@ -88,6 +88,52 @@ if IS_VERCEL:
             except Exception:
                 pass
 
+# --- PERSISTENCIA NATIVA ULTRA RÁPIDA: VERCEL KV (OPCIONAL Y CERO CONFIGURACIÓN) ---
+KV_REST_API_URL = os.environ.get("KV_REST_API_URL")
+KV_REST_API_TOKEN = os.environ.get("KV_REST_API_TOKEN")
+
+import urllib.request
+import urllib.parse
+
+def kv_get(key: str) -> Optional[str]:
+    if not KV_REST_API_URL or not KV_REST_API_TOKEN:
+        return None
+    try:
+        url = f"{KV_REST_API_URL}/get/{key}"
+        req = urllib.request.Request(
+            url,
+            headers={"Authorization": f"Bearer {KV_REST_API_TOKEN}"}
+        )
+        with urllib.request.urlopen(req, timeout=4) as response:
+            res = json.loads(response.read().decode('utf-8'))
+            return res.get("result")
+    except Exception as e:
+        print(f"⚠️ Alerta al consultar Vercel KV: {e}")
+        return None
+
+def kv_set(key: str, value_str: str) -> bool:
+    if not KV_REST_API_URL or not KV_REST_API_TOKEN:
+        return False
+    try:
+        url = f"{KV_REST_API_URL}"
+        # Upstash REST command format: ["SET", key, value]
+        cmd = ["SET", key, value_str]
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(cmd).encode('utf-8'),
+            headers={
+                "Authorization": f"Bearer {KV_REST_API_TOKEN}",
+                "Content-Type": "application/json"
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=4) as response:
+            res = json.loads(response.read().decode('utf-8'))
+            return "result" in res
+    except Exception as e:
+        print(f"⚠️ Alerta al escribir en Vercel KV: {e}")
+        return False
+
 # --- CONEXIÓN OPCIONAL A MONGODB (ALTA PERSISTENCIA Y SEGURIDAD) ---
 MONGODB_URI = os.environ.get("MONGODB_URI")
 mongo_db = None
@@ -96,28 +142,47 @@ if MONGODB_URI:
     try:
         from pymongo import MongoClient
         mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=4000)
-        # Intentar obtener base de datos por defecto o usar 'gremio_heroes'
         try:
             mongo_db = mongo_client.get_default_database()
             if mongo_db is None:
                 mongo_db = mongo_client["gremio_heroes"]
         except Exception:
             mongo_db = mongo_client["gremio_heroes"]
-        # Forzar chequeo de ping para comprobar conexión
         mongo_client.admin.command('ping')
         print("💡 Conexión exitosa a base de datos persistente MongoDB en la nube!")
     except Exception as e:
-        print(f"⚠️ Alerta: Error al conectar a MongoDB (cayendo a archivos JSON locales): {e}")
+        print(f"⚠️ Alerta: Error al conectar a MongoDB (cayendo a Vercel KV / archivos locales): {e}")
         mongo_db = None
 
 def read_json_file(filepath: str, default_value: Union[list, dict]) -> Union[list, dict]:
-    # Interceptar lectura para MongoDB
+    filename_key = "gremio:" + os.path.basename(filepath).replace(".json", "")
+
+    # 1. Intentar leer desde Vercel KV (Máxima prioridad, libre de firewalls de IP)
+    if KV_REST_API_URL and KV_REST_API_TOKEN:
+        try:
+            val = kv_get(filename_key)
+            if val is not None:
+                return json.loads(val)
+            else:
+                # Migración inicial automática a Vercel KV desde archivo local
+                if os.path.exists(filepath):
+                    try:
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            local_data = json.load(f)
+                            if local_data:
+                                kv_set(filename_key, json.dumps(local_data, ensure_ascii=False))
+                                return local_data
+                    except Exception:
+                        pass
+        except Exception as e:
+            print(f"⚠️ Error leyendo de Vercel KV: {e}. Cayendo a MongoDB / Disco.")
+
+    # 2. Intentar leer desde MongoDB (Segunda prioridad)
     if mongo_db is not None:
         try:
             if "usuarios.json" in filepath:
                 res = list(mongo_db.usuarios.find({}, {"_id": 0}))
                 if not res and os.path.exists(filepath):
-                    # Migración automática de archivo local a la nube
                     try:
                         with open(filepath, 'r', encoding='utf-8') as f:
                             local_data = json.load(f)
@@ -130,7 +195,6 @@ def read_json_file(filepath: str, default_value: Union[list, dict]) -> Union[lis
             elif "personajes.json" in filepath:
                 res = list(mongo_db.personajes.find({}, {"_id": 0}))
                 if not res and os.path.exists(filepath):
-                    # Migración automática
                     try:
                         with open(filepath, 'r', encoding='utf-8') as f:
                             local_data = json.load(f)
@@ -143,7 +207,6 @@ def read_json_file(filepath: str, default_value: Union[list, dict]) -> Union[lis
             elif "config.json" in filepath:
                 doc = mongo_db.config.find_one({}, {"_id": 0})
                 if not doc and os.path.exists(filepath):
-                    # Migración automática
                     try:
                         with open(filepath, 'r', encoding='utf-8') as f:
                             local_data = json.load(f)
@@ -156,6 +219,7 @@ def read_json_file(filepath: str, default_value: Union[list, dict]) -> Union[lis
         except Exception as e:
             print(f"⚠️ Error al leer de MongoDB: {e}. Cayendo a copia local.")
 
+    # 3. Fallback local en disco
     if os.path.exists(filepath):
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
@@ -165,7 +229,19 @@ def read_json_file(filepath: str, default_value: Union[list, dict]) -> Union[lis
     return default_value
 
 def write_json_file(filepath: str, data: Union[list, dict]):
-    # Interceptar escritura para MongoDB
+    filename_key = "gremio:" + os.path.basename(filepath).replace(".json", "")
+
+    # 1. Intentar escribir en Vercel KV
+    if KV_REST_API_URL and KV_REST_API_TOKEN:
+        try:
+            val_str = json.dumps(data, ensure_ascii=False)
+            success = kv_set(filename_key, val_str)
+            if success:
+                return
+        except Exception as e:
+            print(f"⚠️ Error escribiendo en Vercel KV: {e}. Cayendo a MongoDB / Disco.")
+
+    # 2. Intentar escribir en MongoDB
     if mongo_db is not None:
         try:
             if "usuarios.json" in filepath:
@@ -186,6 +262,7 @@ def write_json_file(filepath: str, data: Union[list, dict]):
         except Exception as e:
             print(f"⚠️ Error al escribir en MongoDB: {e}. Escribiendo copia en archivo local.")
 
+    # 3. Fallback local en disco
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
