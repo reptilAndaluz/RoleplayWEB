@@ -127,7 +127,7 @@ Nginx actuará como guardián de entrada. Servirá todo el frontend estático a 
 
 ### Paso 4.1: Configuración Previa del Dominio (DNS)
 
-Antes de configurar Nginx y solicitar el certificado SSL con Let's Encrypt, es obligatorio que tu dominio (ej. `tudominio.com`) apunte a la dirección IP pública de tu servidor Debian.
+Antes de configurar Nginx y solicitar el certificado SSL con Let's Encrypt, es obligatorio que tu dominio (ej. `roleplayweb.reptilandaluz.com`) apunte a la dirección IP pública de tu servidor Debian.
 
 1. **Obtén la IP pública de tu servidor**:
    Puedes encontrarla en el panel de control de tu VPS o ejecutando en el servidor:
@@ -146,7 +146,7 @@ Antes de configurar Nginx y solicitar el certificado SSL con Let's Encrypt, es o
 > [!IMPORTANT]
 > Los cambios en las DNS pueden tardar desde unos minutos hasta 24-48 horas en propagarse de forma global. Puedes comprobar si tu dominio ya resuelve correctamente ejecutando:
 > ```bash
-> ping -c 3 tudominio.com
+> ping -c 3 roleplayweb.reptilandaluz.com
 > ```
 
 ### Paso 4.2: Registrar el sitio en Nginx
@@ -190,7 +190,7 @@ sudo apt install -y certbot python3-certbot-nginx
 
 # Generar e instalar los certificados SSL automáticamente
 # (Certbot leerá tu archivo de Nginx, generará las llaves y reescribirá la configuración)
-sudo certbot --nginx -d tudominio.com
+sudo certbot --nginx -d roleplayweb.reptilandaluz.com
 ```
 
 > [!TIP]
