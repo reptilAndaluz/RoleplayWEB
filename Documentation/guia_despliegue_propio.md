@@ -23,6 +23,7 @@ sudo apt install -y git curl build-essential python3-pip python3-venv python3-de
 Docker permite aislar la aplicación por completo del sistema operativo principal, facilitando la portabilidad y eliminando cualquier conflicto de versiones de Python o librerías.
 
 ### Paso 2.1: Instalar Docker en Debian
+
 Instala el motor oficial de Docker utilizando el repositorio oficial de Docker para Debian:
 
 ```bash
@@ -32,10 +33,7 @@ curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o 
 sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
 # Configurar el repositorio APT oficial de Docker para Debian
-echo \
-  "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
-  "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
 # Instalar Docker
 sudo apt update
@@ -46,6 +44,7 @@ sudo systemctl enable --now docker
 ```
 
 ### Paso 2.2: Configurar las Variables de Entorno
+
 Crea un archivo `.env` en la raíz del proyecto para definir las contraseñas de forma ultra segura, alejándolas de Git:
 
 ```bash
@@ -62,6 +61,7 @@ SECRET_KEY=UnaCadenaLargaYAleatoriaQueFirmeLosTokensJWT
 ```
 
 ### Paso 2.3: Lanzar la Aplicación
+
 Arranca los contenedores de forma automatizada. Gracias a nuestro volumen mapeado, las bases de datos de `./data` y los archivos multimedia subidos en `./html/uploads` se escribirán en el disco de tu Debian de forma totalmente persistente.
 
 ```bash
@@ -76,6 +76,7 @@ docker compose up -d --build
 Si prefieres ejecutar el servidor de forma directa y nativa sobre el sistema Debian (sin contenedores), utilizaremos un entorno virtual (`venv`) y el gestor de servicios `systemd`.
 
 ### Paso 3.1: Configurar el Entorno Virtual e Instalar Dependencias
+
 Clona el proyecto en tu servidor Debian (por ejemplo, en `/home/reptil/Documentos/Catalogo_D-D`) y ejecuta:
 
 ```bash
@@ -91,6 +92,7 @@ python3 -m venv venv
 ```
 
 ### Paso 3.2: Configurar el Servicio Systemd
+
 Copia nuestro archivo de servicio prediseñado al directorio de servicios del sistema de Debian:
 
 ```bash
@@ -105,6 +107,7 @@ sudo chmod 644 /etc/systemd/system/gremio-heroes.service
 > Si clonaste el proyecto en una ruta distinta a `/home/reptil/Documentos/Catalogo_D-D` o utilizas un usuario Debian diferente a `reptil`, edita el servicio con `sudo nano /etc/systemd/system/gremio-heroes.service` y ajusta las rutas de `WorkingDirectory`, `ExecStart` y el parámetro `User`.
 
 ### Paso 3.3: Iniciar y Habilitar el Servicio
+
 Recarga el daemon de systemd y activa la aplicación para que arranque automáticamente en cada reinicio del servidor Debian:
 
 ```bash
@@ -123,6 +126,7 @@ sudo systemctl status gremio-heroes.service
 Nginx actuará como guardián de entrada. Servirá todo el frontend estático a la velocidad del rayo directamente desde el disco y redirigirá las consultas de la API `/api` al backend de Python.
 
 ### Paso 4.1: Registrar el sitio en Nginx
+
 Copia nuestro archivo de configuración óptimo al directorio de sitios disponibles de Nginx en Debian:
 
 ```bash
@@ -133,6 +137,7 @@ sudo cp nginx.conf /etc/nginx/sites-available/gremio-heroes
 > Edita el archivo con `sudo nano /etc/nginx/sites-available/gremio-heroes` y asegúrate de que el parámetro `root` y la directiva `alias` en `/html/img/uploads/` apunten de forma exacta al directorio absoluto donde está clonado tu proyecto.
 
 ### Paso 4.2: Activar el Sitio y Reiniciar Nginx
+
 Crea el enlace simbólico para activar el sitio, valida que la sintaxis sea perfecta y reinicia el servicio Nginx:
 
 ```bash
@@ -164,7 +169,8 @@ sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d tudominio.com
 ```
 
-*Certbot creará una tarea programada cron en Debian para renovar el certificado SSL automáticamente cada 3 meses.*
+> [!TIP]
+> Certbot creará una tarea programada *cron* en Debian para renovar el certificado SSL automáticamente cada 3 meses.
 
 ---
 
