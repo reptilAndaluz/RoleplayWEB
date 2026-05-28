@@ -180,21 +180,112 @@ sudo systemctl restart nginx
 
 ---
 
-## 🔒 5. Asegurar la Senda con HTTPS (SSL Gratuito Let's Encrypt)
+## 🔒 5. Simular el Dominio Localmente (Senda hosts + Cifrado Opcional)
 
-Para que tu web sea segura e impida que se intercepten las contraseñas al iniciar sesión, habilitaremos el cifrado HTTPS con Let's Encrypt y Certbot de forma automática:
+Como has elegido simular el dominio localmente sin comprar uno real (Opción C), los servidores públicos de Let's Encrypt no podrán verificar tu dominio para emitir un certificado SSL automático. ¡No te preocupes! Podemos mapear el dominio en tu ordenador local y acceder por HTTP estándar, o generar un certificado SSL autofirmado de forma manual.
 
-```bash
-# Instalar Certbot y el plugin de Nginx para Debian
-sudo apt install -y certbot python3-certbot-nginx
+### Paso 5.1: Mapear el Dominio en tu Ordenador Local
 
-# Generar e instalar los certificados SSL automáticamente
-# (Certbot leerá tu archivo de Nginx, generará las llaves y reescribirá la configuración)
-sudo certbot --nginx -d roleplayweb.reptilandaluz.com
-```
+Debes indicarle a tu sistema operativo local que, cuando escribas `roleplayweb.reptilandaluz.com`, resuelva hacia la IP de tu servidor VPS en lugar de buscarlo en Internet.
 
-> [!TIP]
-> Certbot creará una tarea programada *cron* en Debian para renovar el certificado SSL automáticamente cada 3 meses.
+#### En tu ordenador local (si usas Linux o macOS):
+1. Abre la terminal de tu PC local y edita el archivo de hosts:
+   ```bash
+   sudo nano /etc/hosts
+   ```
+2. Añade la siguiente línea al final del archivo (reemplaza `LA_IP_PUBLICA_DE_TU_SERVIDOR` por la IP real de tu VPS):
+   ```text
+   LA_IP_PUBLICA_DE_TU_SERVIDOR roleplayweb.reptilandaluz.com
+   ```
+3. Guarda el archivo (Ctrl+O, Enter, Ctrl+X).
+
+#### En tu ordenador local (si usas Windows):
+1. Abre el programa **Bloc de notas** ejecutándolo como **Administrador**.
+2. Abre el archivo en la ruta `C:\Windows\System32\drivers\etc\hosts`.
+3. Añade la siguiente línea al final del archivo:
+   ```text
+   LA_IP_PUBLICA_DE_TU_SERVIDOR roleplayweb.reptilandaluz.com
+   ```
+4. Guarda los cambios.
+
+---
+
+### Paso 5.2: Acceso por HTTP Estándar (Senda Rápida y Segura en Local)
+
+¡Ya está! Si ya reiniciaste Nginx, puedes abrir tu navegador preferido e ingresar a:
+`http://roleplayweb.reptilandaluz.com`
+
+El sitio web cargará perfectamente a través de HTTP estándar en el puerto 80 sin requerir más configuraciones.
+
+---
+
+### Paso 5.3: Habilitar HTTPS con Certificado Autofirmado (Opcional)
+
+Si deseas probar el portal bajo HTTPS (`https://`) para que las contraseñas viajen cifradas aunque el dominio sea local, podemos generar certificados autofirmados directamente en tu servidor Debian:
+
+1. **Genera los certificados autofirmados**:
+   Conéctate a tu servidor mediante SSH y ejecuta:
+   ```bash
+   sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+     -keyout /etc/ssl/private/roleplayweb.key \
+     -out /etc/ssl/certs/roleplayweb.crt \
+     -subj "/CN=roleplayweb.reptilandaluz.com"
+   ```
+
+2. **Configura Nginx para usar SSL**:
+   Edita tu archivo de Nginx en el servidor (`sudo nano /etc/nginx/sites-available/gremio-heroes` o `TERM=xterm sudo nano ...`) y añade un bloque seguro para el puerto 443. Si lo prefieres, puedes utilizar esta plantilla optimizada en tu `/etc/nginx/sites-available/gremio-heroes`:
+
+   ```nginx
+   server {
+       listen 80;
+       listen [::]:80;
+       server_name roleplayweb.reptilandaluz.com;
+       return 301 https://$host$request_uri;
+   }
+
+   server {
+       listen 443 ssl;
+       listen [::]:443 ssl;
+       server_name roleplayweb.reptilandaluz.com;
+
+       ssl_certificate /etc/ssl/certs/roleplayweb.crt;
+       ssl_certificate_key /etc/ssl/private/roleplayweb.key;
+
+       client_max_body_size 30M;
+       root /home/reptil/Documentos/Catalogo_D-D/html;
+       index index.html;
+
+       location / {
+           try_files $uri $uri/ /index.html;
+       }
+
+       location /html/img/uploads/ {
+           alias /home/reptil/Documentos/Catalogo_D-D/html/uploads/;
+           expires 7d;
+       }
+
+       location /api {
+           proxy_pass http://127.0.0.1:8000;
+           proxy_http_version 1.1;
+           proxy_set_header Upgrade $http_upgrade;
+           proxy_set_header Connection 'upgrade';
+           proxy_set_header Host $host;
+           proxy_cache_bypass $http_upgrade;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   }
+   ```
+
+3. **Valida y reinicia Nginx**:
+   ```bash
+   sudo nginx -t
+   sudo systemctl restart nginx
+   ```
+
+> [!WARNING]
+> Al acceder a `https://roleplayweb.reptilandaluz.com`, tu navegador mostrará un aviso de advertencia ("La conexión no es privada" o "Riesgo de seguridad potencial"). Esto es normal porque el certificado lo has firmado tú y no una entidad certificadora pública. Haz clic en **Configuración avanzada** y selecciona **Acceder/Continuar** para navegar de forma segura.
 
 ---
 
