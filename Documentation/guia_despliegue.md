@@ -22,7 +22,7 @@ Esta guía detalla los pasos necesarios para desplegar y ejecutar el **Portal de
 
 1. **Clonar o descargar el proyecto** en tu espacio de trabajo local:
    ```bash
-   cd /home/reptil/Documentos/Catalogo_D-D
+   cd ruta_del_repositorio
    ```
 
 2. **Crear y activar un entorno virtual de Python**:
@@ -51,5 +51,9 @@ Esta guía detalla los pasos necesarios para desplegar y ejecutar el **Portal de
      ```bash
      python -m uvicorn server:app --reload --port 8081 --host 127.0.0.1
      ```
+   * **Con HTTPS para que nos podamos conectar todos en la misma red**:
+     ```bash
+     python -m uvicorn server:app --reload --port 8081 --host 0.0.0.0 --ssl-keyfile=key.pem --ssl-certfile=cert.pem
+     ```
 
-6. **Verificación**: Abre en tu navegador `https://127.0.0.1:8081` (acepta el riesgo de seguridad del certificado autofirmado) o `http://127.0.0.1:8081`.
+6. **Verificación**: Abre en tu navegador `http://[IP_ADDRESS]:[PORT]` o `https://[IP_ADDRESS]:[PORT]` (acepta el riesgo de seguridad del certificado autofirmado).
