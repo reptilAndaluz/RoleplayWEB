@@ -22,4 +22,6 @@ key.pem
 # Databases and user uploaded files
 data/usuarios.json
 data/personajes.json
+data/sesiones.json
+data/.secret_key
 html/uploads/
