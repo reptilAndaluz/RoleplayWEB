@@ -88,7 +88,74 @@ if IS_VERCEL:
             except Exception:
                 pass
 
+# --- CONEXIÓN OPCIONAL A MONGODB (ALTA PERSISTENCIA Y SEGURIDAD) ---
+MONGODB_URI = os.environ.get("MONGODB_URI")
+mongo_db = None
+
+if MONGODB_URI:
+    try:
+        from pymongo import MongoClient
+        mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=4000)
+        # Intentar obtener base de datos por defecto o usar 'gremio_heroes'
+        try:
+            mongo_db = mongo_client.get_default_database()
+            if mongo_db is None:
+                mongo_db = mongo_client["gremio_heroes"]
+        except Exception:
+            mongo_db = mongo_client["gremio_heroes"]
+        # Forzar chequeo de ping para comprobar conexión
+        mongo_client.admin.command('ping')
+        print("💡 Conexión exitosa a base de datos persistente MongoDB en la nube!")
+    except Exception as e:
+        print(f"⚠️ Alerta: Error al conectar a MongoDB (cayendo a archivos JSON locales): {e}")
+        mongo_db = None
+
 def read_json_file(filepath: str, default_value: Union[list, dict]) -> Union[list, dict]:
+    # Interceptar lectura para MongoDB
+    if mongo_db is not None:
+        try:
+            if "usuarios.json" in filepath:
+                res = list(mongo_db.usuarios.find({}, {"_id": 0}))
+                if not res and os.path.exists(filepath):
+                    # Migración automática de archivo local a la nube
+                    try:
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            local_data = json.load(f)
+                            if local_data:
+                                mongo_db.usuarios.insert_many(local_data)
+                                return local_data
+                    except Exception:
+                        pass
+                return res
+            elif "personajes.json" in filepath:
+                res = list(mongo_db.personajes.find({}, {"_id": 0}))
+                if not res and os.path.exists(filepath):
+                    # Migración automática
+                    try:
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            local_data = json.load(f)
+                            if local_data:
+                                mongo_db.personajes.insert_many(local_data)
+                                return local_data
+                    except Exception:
+                        pass
+                return res
+            elif "config.json" in filepath:
+                doc = mongo_db.config.find_one({}, {"_id": 0})
+                if not doc and os.path.exists(filepath):
+                    # Migración automática
+                    try:
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            local_data = json.load(f)
+                            if local_data:
+                                mongo_db.config.insert_one(local_data)
+                                return local_data
+                    except Exception:
+                        pass
+                return doc if doc is not None else default_value
+        except Exception as e:
+            print(f"⚠️ Error al leer de MongoDB: {e}. Cayendo a copia local.")
+
     if os.path.exists(filepath):
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
@@ -98,13 +165,35 @@ def read_json_file(filepath: str, default_value: Union[list, dict]) -> Union[lis
     return default_value
 
 def write_json_file(filepath: str, data: Union[list, dict]):
+    # Interceptar escritura para MongoDB
+    if mongo_db is not None:
+        try:
+            if "usuarios.json" in filepath:
+                mongo_db.usuarios.delete_many({})
+                if data:
+                    mongo_db.usuarios.insert_many(data)
+                return
+            elif "personajes.json" in filepath:
+                mongo_db.personajes.delete_many({})
+                if data:
+                    mongo_db.personajes.insert_many(data)
+                return
+            elif "config.json" in filepath:
+                mongo_db.config.delete_many({})
+                if data:
+                    mongo_db.config.insert_one(data)
+                return
+        except Exception as e:
+            print(f"⚠️ Error al escribir en MongoDB: {e}. Escribiendo copia en archivo local.")
+
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 # Inicializar archivos con datos por defecto
 def init_db():
     # 1. Configuración por defecto
-    if not os.path.exists(CONFIG_FILE):
+    cfg = read_json_file(CONFIG_FILE, None)
+    if not cfg:
         default_config = {
             "titulo": "Gremio de Héroes D&D",
             "descripcion": "El archivo místico donde descansan los registros de los aventureros de nuestras campañas.",
@@ -115,20 +204,38 @@ def init_db():
 
     # 2. Usuarios por defecto (Admin)
     usuarios = read_json_file(USERS_FILE, [])
-    if not usuarios:
-        # Contraseña por defecto: 1234
+    
+    # Leer credenciales desde variables de entorno para alta seguridad en Vercel
+    env_admin_user = os.environ.get("ADMIN_USERNAME", "admin")
+    env_admin_pass = os.environ.get("ADMIN_PASSWORD", "1234")
+    
+    # Si ya hay usuarios, verificar si hay un admin y actualizar sus credenciales según variables de entorno
+    admin_found = False
+    for u in usuarios:
+        if u["role"] == "admin" or u["id"] == "usr_admin00":
+            # Actualizar dinámicamente si el usuario definió explícitamente variables de entorno custom
+            if os.environ.get("ADMIN_USERNAME") or os.environ.get("ADMIN_PASSWORD"):
+                u["username"] = env_admin_user
+                u["password_hash"] = hash_password(env_admin_pass)
+            admin_found = True
+            break
+            
+    if not admin_found:
         admin_user = {
             "id": "usr_admin00",
-            "username": "admin",
-            "password_hash": hash_password("1234"),
+            "username": env_admin_user,
+            "password_hash": hash_password(env_admin_pass),
             "role": "admin",
             "created_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         }
         usuarios.append(admin_user)
-        write_json_file(USERS_FILE, usuarios)
+        
+    # Guardar la lista para persistir la creación o la actualización dinámica
+    write_json_file(USERS_FILE, usuarios)
 
     # 3. Personajes por defecto
-    if not os.path.exists(CHARACTERS_FILE):
+    chars = read_json_file(CHARACTERS_FILE, None)
+    if chars is None:
         write_json_file(CHARACTERS_FILE, [])
 
 init_db()
