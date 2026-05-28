@@ -118,7 +118,7 @@ def init_db():
     if not usuarios:
         # Contraseña por defecto: 1234
         admin_user = {
-            "id": f"usr_{uuid.uuid4().hex[:8]}",
+            "id": "usr_admin00",
             "username": "admin",
             "password_hash": hash_password("1234"),
             "role": "admin",
@@ -155,7 +155,21 @@ def get_current_user(token: Optional[str] = Depends(oauth2_scheme)):
         usuarios = read_json_file(USERS_FILE, [])
         user_exists = any(u["id"] == user_id for u in usuarios)
         if not user_exists:
-            raise HTTPException(status_code=401, detail="El usuario ya no existe")
+            if IS_VERCEL:
+                # Si corre en Vercel, para evitar desconexiones debido a la naturaleza efímera serverless,
+                # si el token JWT es válido (firmado correctamente con nuestro SECRET_KEY),
+                # podemos recrear el usuario en la base de datos temporal local del contenedor!
+                new_user = {
+                    "id": user_id,
+                    "username": username,
+                    "password_hash": hash_password("1234"), # Contraseña genérica para el registro temporal
+                    "role": role,
+                    "created_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+                }
+                usuarios.append(new_user)
+                write_json_file(USERS_FILE, usuarios)
+            else:
+                raise HTTPException(status_code=401, detail="El usuario ya no existe")
             
         return {"id": user_id, "username": username, "role": role}
     except jwt.ExpiredSignatureError:
