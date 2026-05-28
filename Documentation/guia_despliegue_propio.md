@@ -125,7 +125,31 @@ sudo systemctl status gremio-heroes.service
 
 Nginx actuará como guardián de entrada. Servirá todo el frontend estático a la velocidad del rayo directamente desde el disco y redirigirá las consultas de la API `/api` al backend de Python.
 
-### Paso 4.1: Registrar el sitio en Nginx
+### Paso 4.1: Configuración Previa del Dominio (DNS)
+
+Antes de configurar Nginx y solicitar el certificado SSL con Let's Encrypt, es obligatorio que tu dominio (ej. `tudominio.com`) apunte a la dirección IP pública de tu servidor Debian.
+
+1. **Obtén la IP pública de tu servidor**:
+   Puedes encontrarla en el panel de control de tu VPS o ejecutando en el servidor:
+   ```bash
+   curl ifconfig.me
+   ```
+
+2. **Configura los registros DNS**:
+   Accede al panel del proveedor donde hayas comprado el dominio (Cloudflare, Namecheap, GoDaddy, etc.) y añade los siguientes registros en la zona DNS de tu dominio:
+
+   | Tipo | Nombre | Valor | TTL |
+   | :--- | :--- | :--- | :--- |
+   | **A** | `@` (o vacío) | `LA_IP_PUBLICA_DE_TU_SERVIDOR` | Automático / 3600 |
+   | **A** | `www` (opcional) | `LA_IP_PUBLICA_DE_TU_SERVIDOR` | Automático / 3600 |
+
+> [!IMPORTANT]
+> Los cambios en las DNS pueden tardar desde unos minutos hasta 24-48 horas en propagarse de forma global. Puedes comprobar si tu dominio ya resuelve correctamente ejecutando:
+> ```bash
+> ping -c 3 tudominio.com
+> ```
+
+### Paso 4.2: Registrar el sitio en Nginx
 
 Copia nuestro archivo de configuración óptimo al directorio de sitios disponibles de Nginx en Debian:
 
@@ -134,9 +158,9 @@ sudo cp nginx.conf /etc/nginx/sites-available/gremio-heroes
 ```
 
 > [!NOTE]
-> Edita el archivo con `sudo nano /etc/nginx/sites-available/gremio-heroes` y asegúrate de que el parámetro `root` y la directiva `alias` en `/html/img/uploads/` apunten de forma exacta al directorio absoluto donde está clonado tu proyecto.
+> Edita el archivo con `sudo nano /etc/nginx/sites-available/gremio-heroes` (o con `TERM=xterm sudo nano /etc/nginx/sites-available/gremio-heroes` si tienes problemas de terminal) y asegúrate de que el parámetro `root` y la directiva `alias` en `/html/img/uploads/` apunten de forma exacta al directorio absoluto donde está clonado tu proyecto.
 
-### Paso 4.2: Activar el Sitio y Reiniciar Nginx
+### Paso 4.3: Activar el Sitio y Reiniciar Nginx
 
 Crea el enlace simbólico para activar el sitio, valida que la sintaxis sea perfecta y reinicia el servicio Nginx:
 
