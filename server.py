@@ -520,7 +520,7 @@ async def export_characters_csv(user: dict = Depends(get_current_user)):
     if user["role"] != "admin":
         personajes = [p for p in personajes if p.get("user_id") == user["id"]]
         
-    cabeceras = ["Nombre", "Apodo", "Campana", "Clases", "Descripcion_Habilidades", "Foto_Principal", "Galeria"]
+    cabeceras = ["Nombre", "Apodo", "Campana", "Clases", "Descripcion_Habilidades", "Foto_Principal", "Galeria", "FUE", "DES", "CON", "INT", "SAB", "CAR"]
     
     fd, path = tempfile.mkstemp(suffix=".csv")
     with os.fdopen(fd, 'w', encoding='utf-8', newline='') as f:
@@ -529,6 +529,7 @@ async def export_characters_csv(user: dict = Depends(get_current_user)):
         for p in personajes:
             clases_str = ", ".join(p.get("clases", []))
             galeria_str = ", ".join(p.get("galeria", []))
+            stats = p.get("stats") or {}
             writer.writerow([
                 p.get("nombre", ""),
                 p.get("apodo", ""),
@@ -536,7 +537,13 @@ async def export_characters_csv(user: dict = Depends(get_current_user)):
                 clases_str,
                 p.get("descripcion_habilidades", ""),
                 p.get("foto_principal", ""),
-                galeria_str
+                galeria_str,
+                stats.get("fue", 10),
+                stats.get("des", 10),
+                stats.get("con", 10),
+                stats.get("int", 10),
+                stats.get("sab", 10),
+                stats.get("car", 10)
             ])
             
     return FileResponse(path, media_type="text/csv", filename="backup_personajes.csv")
@@ -545,7 +552,7 @@ async def export_characters_csv(user: dict = Depends(get_current_user)):
 @app.get("/api/personajes/template/csv")
 async def get_csv_template():
     # Retornar una plantilla CSV predefinida
-    cabeceras = ["Nombre", "Apodo", "Campana", "Clases", "Descripcion_Habilidades", "Foto_Principal", "Galeria"]
+    cabeceras = ["Nombre", "Apodo", "Campana", "Clases", "Descripcion_Habilidades", "Foto_Principal", "Galeria", "FUE", "DES", "CON", "INT", "SAB", "CAR"]
     ejemplo = [
         "Regdar", 
         "El Indomable", 
@@ -553,7 +560,8 @@ async def get_csv_template():
         "Guerrero, Campeón", 
         "Fuerte, porta espadas mandoble de gran filo. Lidera las embestidas.", 
         "/html/img/default-avatar.svg", 
-        ""
+        "",
+        "18", "12", "16", "8", "10", "12"
     ]
     
     fd, path = tempfile.mkstemp(suffix=".csv")
@@ -593,6 +601,18 @@ async def import_characters(file: UploadFile = File(...), user: dict = Depends(g
                 if isinstance(galeria, str):
                     galeria = [g.strip() for g in galeria.split(",") if g.strip()]
                     
+                stats_raw = char_data.get("stats")
+                if isinstance(stats_raw, dict):
+                    try:
+                        stats = {k: int(v) for k, v in stats_raw.items() if k in ["fue", "des", "con", "int", "sab", "car"]}
+                        for k in ["fue", "des", "con", "int", "sab", "car"]:
+                            if k not in stats:
+                                stats[k] = 10
+                    except Exception:
+                        stats = {"fue": 10, "des": 10, "con": 10, "int": 10, "sab": 10, "car": 10}
+                else:
+                    stats = {"fue": 10, "des": 10, "con": 10, "int": 10, "sab": 10, "car": 10}
+
                 nuevo = {
                     "id": f"char_{uuid.uuid4().hex[:8]}",
                     "user_id": user["id"],
@@ -603,6 +623,7 @@ async def import_characters(file: UploadFile = File(...), user: dict = Depends(g
                     "descripcion_habilidades": char_data.get("descripcion_habilidades", ""),
                     "foto_principal": char_data.get("foto_principal") or "/html/img/default-avatar.svg",
                     "galeria": galeria,
+                    "stats": stats,
                     "created_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
                 }
                 nuevos_personajes.append(nuevo)
@@ -644,6 +665,12 @@ async def import_characters(file: UploadFile = File(...), user: dict = Depends(g
             elif h in ["descripcionhabilidades", "descripcion", "skills"]: col_map["descripcion"] = idx
             elif h in ["fotoprincipal", "avatar"]: col_map["foto_principal"] = idx
             elif h in ["galeria", "gallery"]: col_map["galeria"] = idx
+            elif h in ["fue", "fuerza"]: col_map["fue"] = idx
+            elif h in ["des", "destreza"]: col_map["des"] = idx
+            elif h in ["con", "constitucion"]: col_map["con"] = idx
+            elif h in ["int", "inteligencia"]: col_map["int"] = idx
+            elif h in ["sab", "sabiduria"]: col_map["sab"] = idx
+            elif h in ["car", "carisma"]: col_map["car"] = idx
             
         # Campos requeridos mínimos
         if "nombre" not in col_map or "campana" not in col_map:
@@ -673,6 +700,21 @@ async def import_characters(file: UploadFile = File(...), user: dict = Depends(g
             galeria_raw = row[col_map["galeria"]].strip() if "galeria" in col_map else ""
             galeria = [g.strip() for g in galeria_raw.split(",") if g.strip()]
             
+            def parse_stat(val, default=10):
+                try:
+                    return int(float(val.strip()))
+                except Exception:
+                    return default
+            
+            stats = {
+                "fue": parse_stat(row[col_map["fue"]]) if "fue" in col_map else 10,
+                "des": parse_stat(row[col_map["des"]]) if "des" in col_map else 10,
+                "con": parse_stat(row[col_map["con"]]) if "con" in col_map else 10,
+                "int": parse_stat(row[col_map["int"]]) if "int" in col_map else 10,
+                "sab": parse_stat(row[col_map["sab"]]) if "sab" in col_map else 10,
+                "car": parse_stat(row[col_map["car"]]) if "car" in col_map else 10
+            }
+            
             nuevo = {
                 "id": f"char_{uuid.uuid4().hex[:8]}",
                 "user_id": user["id"],
@@ -683,6 +725,7 @@ async def import_characters(file: UploadFile = File(...), user: dict = Depends(g
                 "descripcion_habilidades": desc,
                 "foto_principal": foto,
                 "galeria": galeria,
+                "stats": stats,
                 "created_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
             }
             nuevos_personajes.append(nuevo)
