@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  gremio_heroes:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gremio_heroes_app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # Volúmenes para persistir datos y uploads directamente en el disco del servidor Debian
+      - ./data:/app/data
+      - ./html/uploads:/app/html/uploads
+    environment:
+      # Inyección segura de credenciales administrativas (se leen desde el archivo .env si existe)
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-1234}
+      # Opcionales si se desea conectar a la nube
+      - MONGODB_URI=${MONGODB_URI}
+      - SECRET_KEY=${SECRET_KEY:-gremio_heroes_secreto_sagrado_de_los_dioses}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
