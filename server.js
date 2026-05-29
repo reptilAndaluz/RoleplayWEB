@@ -825,6 +825,16 @@ app.post("/api/personajes", authenticateToken, async (req, res) => {
     }
 
     const personajes = await readJsonFile(CHARACTERS_FILE, []);
+    
+    // Evitar que el mismo usuario registre un duplicado (mismo nombre y campaña)
+    const exists = personajes.some(p => 
+        p.user_id === req.user.id && 
+        p.nombre.toLowerCase().trim() === nombre.toLowerCase().trim() && 
+        p.campana.toLowerCase().trim() === campana.toLowerCase().trim()
+    );
+    if (exists) {
+        return res.status(400).json({ detail: `Ya tienes alistado un héroe llamado '${nombre}' en la campaña '${campana}'.` });
+    }
 
     const newChar = {
         id: `char_${crypto.randomBytes(4).toString('hex')}`,
@@ -1233,28 +1243,33 @@ app.get("/api/personajes/template/csv", async (req, res) => {
     return res.send(csvContent);
 });
 
-// Helper para parsear listas de strings de forma robusta (soporta arrays JSON o strings delimitados por comas/puntos y comas)
+// Helper para parsear listas de strings de forma robusta y libre de duplicados (soporta arrays JSON o strings delimitados por comas/puntos y comas)
 function parseStringList(rawInput) {
+    let result = [];
     if (!rawInput) return [];
     if (Array.isArray(rawInput)) {
-        return rawInput.map(item => String(item).trim()).filter(item => item);
-    }
-    const trimmed = String(rawInput).trim();
-    if (!trimmed) return [];
-
-    // Si parece un array JSON, intentar parsearlo
-    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-        try {
-            const parsed = JSON.parse(trimmed);
-            if (Array.isArray(parsed)) {
-                return parsed.map(x => String(x).trim()).filter(x => x);
+        result = rawInput.map(item => String(item).trim()).filter(item => item);
+    } else {
+        const trimmed = String(rawInput).trim();
+        if (trimmed) {
+            // Si parece un array JSON, intentar parsearlo
+            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed)) {
+                        result = parsed.map(x => String(x).trim()).filter(x => x);
+                    }
+                } catch (e) {
+                    // Caer al split simple si falla
+                }
             }
-        } catch (e) {
-            // Caer al split por comas/puntos y comas si falla
+            if (result.length === 0) {
+                result = trimmed.split(/[;,]+/).map(item => item.trim()).filter(item => item);
+            }
         }
     }
-
-    return trimmed.split(/[;,]+/).map(item => item.trim()).filter(item => item);
+    // Eliminar duplicados de manera limpia
+    return Array.from(new Set(result));
 }
 
 // Helper manual de parseo CSV robusto libre de dependencias
@@ -1317,6 +1332,8 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
     let importados = 0;
     const nuevosPersonajes = [];
 
+    const personajesExistentes = await readJsonFile(CHARACTERS_FILE, []);
+
     // 1. Carga masiva desde JSON
     if (filename.endsWith('.json')) {
         try {
@@ -1329,6 +1346,23 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
             for (let charData of data) {
                 if (!charData.nombre || !charData.campana) {
                     continue;
+                }
+
+                const nombreClean = charData.nombre.trim();
+                const campanaClean = charData.campana.trim();
+
+                // Evitar duplicados
+                const esDuplicado = personajesExistentes.some(p => 
+                    p.user_id === req.user.id && 
+                    p.nombre.toLowerCase().trim() === nombreClean.toLowerCase() && 
+                    p.campana.toLowerCase().trim() === campanaClean.toLowerCase()
+                ) || nuevosPersonajes.some(p => 
+                    p.nombre.toLowerCase().trim() === nombreClean.toLowerCase() && 
+                    p.campana.toLowerCase().trim() === campanaClean.toLowerCase()
+                );
+
+                if (esDuplicado) {
+                    continue; // Saltar duplicado
                 }
 
                 let clases = parseStringList(charData.clases);
@@ -1346,9 +1380,9 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
                 const nuevo = {
                     id: `char_${crypto.randomBytes(4).toString('hex')}`,
                     user_id: req.user.id,
-                    nombre: charData.nombre,
+                    nombre: nombreClean,
                     apodo: charData.apodo || "",
-                    campana: charData.campana,
+                    campana: campanaClean,
                     clases: clases,
                     descripcion_habilidades: charData.descripcion_habilidades || "",
                     foto_principal: charData.foto_principal || "/html/img/default-avatar.svg",
@@ -1416,6 +1450,20 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
             const campana = row[colMap["campana"]].trim();
             if (!nombre || !campana) {
                 continue;
+            }
+
+            // Evitar duplicados
+            const esDuplicado = personajesExistentes.some(p => 
+                p.user_id === req.user.id && 
+                p.nombre.toLowerCase().trim() === nombre.toLowerCase() && 
+                p.campana.toLowerCase().trim() === campana.toLowerCase()
+            ) || nuevosPersonajes.some(p => 
+                p.nombre.toLowerCase().trim() === nombre.toLowerCase() && 
+                p.campana.toLowerCase().trim() === campana.toLowerCase()
+            );
+
+            if (esDuplicado) {
+                continue; // Saltar duplicado
             }
 
             const apodo = colMap["apodo"] !== undefined ? row[colMap["apodo"]].trim() : "";
