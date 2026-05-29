@@ -1,8 +1,0 @@
-fastapi
-uvicorn
-pyjwt
-pydantic
-python-multipart
-cryptography
-pymongo
-dnspython
