@@ -1061,15 +1061,13 @@ app.get("/api/personajes/export/csv", authenticateToken, async (req, res) => {
 
 // --- DESCARGA DE PLANTILLAS Y CARGA MASIVA ---
 app.get("/api/personajes/template/csv", async (req, res) => {
-    const cabeceras = ["Nombre", "Apodo", "Campana", "Clases", "Descripcion_Habilidades", "Foto_Principal", "Galeria", "FUE", "DES", "CON", "INT", "SAB", "CAR"];
+    const cabeceras = ["Nombre", "Apodo", "Campana", "Clases", "Descripcion_Habilidades", "FUE", "DES", "CON", "INT", "SAB", "CAR"];
     const ejemplo = [
         "Regdar", 
         "El Indomable", 
         "La Tumba de la Aniquilación", 
         "Guerrero, Campeón", 
         "Fuerte, porta espadas mandoble de gran filo. Lidera las embestidas.", 
-        "/html/img/default-avatar.svg", 
-        "",
         "18", "12", "16", "8", "10", "12"
     ];
 
@@ -1156,10 +1154,16 @@ function parseCSV(contentStr) {
 
 const urlModule = require('url');
 
-async function downloadExternalImage(imageUrl, destDir) {
+// Descarga una imagen externa y la convierte a Base64 Data URI (Stateless)
+async function downloadExternalImage(imageUrl) {
     if (!imageUrl || typeof imageUrl !== 'string') return null;
     
-    // Si no empieza con http:// o https://, ya es una ruta local, no hacemos nada
+    // Si ya es un Data URI Base64, devolverlo tal cual
+    if (imageUrl.startsWith('data:')) {
+        return imageUrl;
+    }
+
+    // Si no empieza con http:// o https://, es una ruta local legacy, no hacemos nada
     if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
         return imageUrl;
     }
@@ -1169,7 +1173,6 @@ async function downloadExternalImage(imageUrl, destDir) {
             const parsedUrl = urlModule.parse(imageUrl);
             const protocol = parsedUrl.protocol === 'https:' ? https : http;
             
-            // Bypass SSL validation
             const agent = parsedUrl.protocol === 'https:' ? new https.Agent({ rejectUnauthorized: false }) : undefined;
             
             const options = {
@@ -1180,7 +1183,7 @@ async function downloadExternalImage(imageUrl, destDir) {
                 method: 'GET',
                 agent: agent,
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                 },
                 timeout: 5000
             };
@@ -1191,7 +1194,7 @@ async function downloadExternalImage(imageUrl, destDir) {
                     if (!redirectUrl.startsWith('http')) {
                         redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${redirectUrl}`;
                     }
-                    downloadExternalImage(redirectUrl, destDir).then(resolve);
+                    downloadExternalImage(redirectUrl).then(resolve);
                     return;
                 }
 
@@ -1200,41 +1203,18 @@ async function downloadExternalImage(imageUrl, destDir) {
                     return;
                 }
 
-                const contentType = res.headers['content-type'] || '';
-                let ext = '.jpg';
-                if (contentType.includes('image/png')) ext = '.png';
-                else if (contentType.includes('image/gif')) ext = '.gif';
-                else if (contentType.includes('image/webp')) ext = '.webp';
-                else if (contentType.includes('image/jpeg')) ext = '.jpg';
-                else {
-                    const urlExt = path.extname(parsedUrl.pathname).toLowerCase();
-                    if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(urlExt)) {
-                        ext = urlExt;
-                    }
-                }
-
-                const filename = crypto.randomBytes(16).toString('hex') + ext;
-                const filePath = path.join(destDir, filename);
-                const fileStream = fs.createWriteStream(filePath);
-
-                res.pipe(fileStream);
-
-                fileStream.on('finish', () => {
-                    fileStream.close();
-                    const folderName = destDir.endsWith('avatars') ? 'avatars' : 'galleries';
-                    resolve(`/html/img/uploads/${folderName}/${filename}`);
+                const contentType = res.headers['content-type'] || 'image/jpeg';
+                const chunks = [];
+                res.on('data', (chunk) => chunks.push(chunk));
+                res.on('end', () => {
+                    const buffer = Buffer.concat(chunks);
+                    const base64 = buffer.toString('base64');
+                    resolve(`data:${contentType};base64,${base64}`);
                 });
-
-                fileStream.on('error', (err) => {
-                    fs.unlink(filePath, () => {});
-                    resolve(null);
-                });
+                res.on('error', () => resolve(null));
             });
 
-            req.on('error', (e) => {
-                resolve(null);
-            });
-
+            req.on('error', () => resolve(null));
             req.on('timeout', () => {
                 req.destroy();
                 resolve(null);
@@ -1310,14 +1290,14 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
 
                 let foto_principal = "/html/img/default-avatar.svg";
                 if (charData.foto_principal) {
-                    const downloaded = await downloadExternalImage(charData.foto_principal, AVATARS_DIR);
+                    const downloaded = await downloadExternalImage(charData.foto_principal);
                     foto_principal = downloaded || "/html/img/default-avatar.svg";
                 }
 
                 const galeria = [];
                 if (galeriaRaw && Array.isArray(galeriaRaw)) {
                     for (let imgUrl of galeriaRaw) {
-                        const downloaded = await downloadExternalImage(imgUrl, GALLERIES_DIR);
+                        const downloaded = await downloadExternalImage(imgUrl);
                         if (downloaded) {
                             galeria.push(downloaded);
                         } else {
@@ -1455,7 +1435,7 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
             if (!foto) {
                 foto = "/html/img/default-avatar.svg";
             } else {
-                const downloaded = await downloadExternalImage(foto, AVATARS_DIR);
+                const downloaded = await downloadExternalImage(foto);
                 foto = downloaded || "/html/img/default-avatar.svg";
             }
 
@@ -1463,7 +1443,7 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
             const galeriaItems = parseStringList(galeriaRaw);
             const galeria = [];
             for (let imgUrl of galeriaItems) {
-                const downloaded = await downloadExternalImage(imgUrl, GALLERIES_DIR);
+                const downloaded = await downloadExternalImage(imgUrl);
                 if (downloaded) {
                     galeria.push(downloaded);
                 } else {
@@ -1519,45 +1499,8 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
     });
 });
 
-// --- SERVIDOR DE IMÁGENES LOCALES DE SUBIDA ---
-app.get("/html/img/uploads/avatars/:filename", (req, res) => {
-    const filename = req.params.filename;
-    const filePath = path.join(AVATARS_DIR, filename);
-    if (fs.existsSync(filePath)) {
-        return res.sendFile(filePath);
-    }
-    const fallbackPath = path.join(BASE_DIR, "html", "img", "uploads", "avatars", filename);
-    if (fs.existsSync(fallbackPath)) {
-        return res.sendFile(fallbackPath);
-    }
-    return res.status(404).send("Imagen no encontrada");
-});
-
-app.get("/html/img/uploads/galleries/:filename", (req, res) => {
-    const filename = req.params.filename;
-    const filePath = path.join(GALLERIES_DIR, filename);
-    if (fs.existsSync(filePath)) {
-        return res.sendFile(filePath);
-    }
-    const fallbackPath = path.join(BASE_DIR, "html", "img", "uploads", "galleries", filename);
-    if (fs.existsSync(fallbackPath)) {
-        return res.sendFile(fallbackPath);
-    }
-    return res.status(404).send("Imagen no encontrada");
-});
-
-app.get("/html/img/uploads/gallerys/:filename", (req, res) => {
-    const filename = req.params.filename;
-    const filePath = path.join(GALLERIES_DIR, filename);
-    if (fs.existsSync(filePath)) {
-        return res.sendFile(filePath);
-    }
-    const fallbackPath = path.join(BASE_DIR, "html", "img", "uploads", "galleries", filename);
-    if (fs.existsSync(fallbackPath)) {
-        return res.sendFile(fallbackPath);
-    }
-    return res.status(404).send("Imagen no encontrada");
-});
+// Las imágenes ahora son Base64 Data URIs embebidas en la base de datos.
+// Ya no se sirven desde el disco local.
 
 // --- SERVIDOR DE ARCHIVOS ESTÁTICOS ---
 const HTML_DIR = path.join(BASE_DIR, "html");
