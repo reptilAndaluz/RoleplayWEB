@@ -370,37 +370,81 @@ async function writeJsonFile(filepath, data) {
                     );
                 }
             } else if (filename === "usuarios.json") {
-                await client.query('DELETE FROM usuarios');
+                const userIds = [];
                 for (let u of data) {
-                    await client.query(
-                        'INSERT INTO usuarios (id, username, password_hash, role, created_at) VALUES ($1, $2, $3, $4, $5)',
-                        [u.id, u.username, u.password_hash, u.role, u.created_at]
-                    );
+                    userIds.push(u.id);
+                    await client.query(`
+                        INSERT INTO usuarios (id, username, password_hash, role, created_at)
+                        VALUES ($1, $2, $3, $4, $5)
+                        ON CONFLICT (id) DO UPDATE SET
+                            username = EXCLUDED.username,
+                            password_hash = EXCLUDED.password_hash,
+                            role = EXCLUDED.role
+                    `, [u.id, u.username, u.password_hash, u.role, u.created_at]);
+                }
+                if (userIds.length > 0) {
+                    await client.query('DELETE FROM usuarios WHERE id NOT IN (' + userIds.map((_, i) => `$${i + 1}`).join(',') + ')', userIds);
+                } else {
+                    await client.query('DELETE FROM usuarios');
                 }
             } else if (filename === "personajes.json") {
-                await client.query('DELETE FROM personajes');
+                const charIds = [];
                 for (let p of data) {
-                    await client.query(
-                        'INSERT INTO personajes (id, user_id, nombre, apodo, campana, clases, descripcion_habilidades, foto_principal, galeria, stats, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)',
-                        [p.id, p.user_id, p.nombre, p.apodo || "", p.campana, JSON.stringify(p.clases || []), p.descripcion_habilidades || "", p.foto_principal || "", JSON.stringify(p.galeria || []), JSON.stringify(p.stats || {}), p.created_at]
-                    );
+                    charIds.push(p.id);
+                    await client.query(`
+                        INSERT INTO personajes (id, user_id, nombre, apodo, campana, clases, descripcion_habilidades, foto_principal, galeria, stats, created_at)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                        ON CONFLICT (id) DO UPDATE SET
+                            user_id = EXCLUDED.user_id,
+                            nombre = EXCLUDED.nombre,
+                            apodo = EXCLUDED.apodo,
+                            campana = EXCLUDED.campana,
+                            clases = EXCLUDED.clases,
+                            descripcion_habilidades = EXCLUDED.descripcion_habilidades,
+                            foto_principal = EXCLUDED.foto_principal,
+                            galeria = EXCLUDED.galeria,
+                            stats = EXCLUDED.stats
+                    `, [
+                        p.id, p.user_id, p.nombre, p.apodo || "", p.campana, 
+                        JSON.stringify(p.clases || []), p.descripcion_habilidades || "", 
+                        p.foto_principal || "", JSON.stringify(p.galeria || []), 
+                        JSON.stringify(p.stats || {}), p.created_at
+                    ]);
+                }
+                if (charIds.length > 0) {
+                    await client.query('DELETE FROM personajes WHERE id NOT IN (' + charIds.map((_, i) => `$${i + 1}`).join(',') + ')', charIds);
+                } else {
+                    await client.query('DELETE FROM personajes');
                 }
             } else if (filename === "sesiones.json") {
-                await client.query('DELETE FROM sesion_personajes');
-                await client.query('DELETE FROM sesiones');
+                const sessionIds = [];
                 for (let s of data) {
-                    await client.query(
-                        'INSERT INTO sesiones (id, nombre, descripcion, dm_id, dm_username, created_at) VALUES ($1, $2, $3, $4, $5, $6)',
-                        [s.id, s.nombre, s.descripcion || "", s.dm_id, s.dm_username, s.created_at]
-                    );
+                    sessionIds.push(s.id);
+                    await client.query(`
+                        INSERT INTO sesiones (id, nombre, descripcion, dm_id, dm_username, created_at)
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                        ON CONFLICT (id) DO UPDATE SET
+                            nombre = EXCLUDED.nombre,
+                            descripcion = EXCLUDED.descripcion,
+                            dm_id = EXCLUDED.dm_id,
+                            dm_username = EXCLUDED.dm_username
+                    `, [s.id, s.nombre, s.descripcion || "", s.dm_id, s.dm_username, s.created_at]);
+
+                    // Sincronizar tabla junction de personajes en sesiones
+                    await client.query('DELETE FROM sesion_personajes WHERE session_id = $1', [s.id]);
                     if (s.personajes && s.personajes.length > 0) {
                         for (let cid of s.personajes) {
                             await client.query(
-                                'INSERT INTO sesion_personajes (session_id, character_id) VALUES ($1, $2)',
+                                'INSERT INTO sesion_personajes (session_id, character_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
                                 [s.id, cid]
                             );
                         }
                     }
+                }
+                if (sessionIds.length > 0) {
+                    await client.query('DELETE FROM sesiones WHERE id NOT IN (' + sessionIds.map((_, i) => `$${i + 1}`).join(',') + ')', sessionIds);
+                } else {
+                    await client.query('DELETE FROM sesiones');
                 }
             }
             await client.query('COMMIT');
@@ -1105,7 +1149,8 @@ app.post("/api/upload/:upload_type", authenticateToken, (req, res) => {
         }
         
         const uploadType = req.params.upload_type;
-        const publicUrl = `/html/img/uploads/${uploadType}s/${req.file.filename}`;
+        const folderName = uploadType === "avatar" ? "avatars" : "galleries";
+        const publicUrl = `/html/img/uploads/${folderName}/${req.file.filename}`;
         return res.json({ status: "success", url: publicUrl });
     });
 });
@@ -1188,6 +1233,30 @@ app.get("/api/personajes/template/csv", async (req, res) => {
     return res.send(csvContent);
 });
 
+// Helper para parsear listas de strings de forma robusta (soporta arrays JSON o strings delimitados por comas/puntos y comas)
+function parseStringList(rawInput) {
+    if (!rawInput) return [];
+    if (Array.isArray(rawInput)) {
+        return rawInput.map(item => String(item).trim()).filter(item => item);
+    }
+    const trimmed = String(rawInput).trim();
+    if (!trimmed) return [];
+
+    // Si parece un array JSON, intentar parsearlo
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+        try {
+            const parsed = JSON.parse(trimmed);
+            if (Array.isArray(parsed)) {
+                return parsed.map(x => String(x).trim()).filter(x => x);
+            }
+        } catch (e) {
+            // Caer al split por comas/puntos y comas si falla
+        }
+    }
+
+    return trimmed.split(/[;,]+/).map(item => item.trim()).filter(item => item);
+}
+
 // Helper manual de parseo CSV robusto libre de dependencias
 function parseCSV(contentStr) {
     const firstLine = contentStr.split(/\r?\n/)[0];
@@ -1262,15 +1331,8 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
                     continue;
                 }
 
-                let clases = charData.clases || [];
-                if (typeof clases === 'string') {
-                    clases = clases.split(",").map(c => c.trim()).filter(c => c);
-                }
-
-                let galeria = charData.galeria || [];
-                if (typeof galeria === 'string') {
-                    galeria = galeria.split(",").map(g => g.trim()).filter(g => g);
-                }
+                let clases = parseStringList(charData.clases);
+                let galeria = parseStringList(charData.galeria);
 
                 let stats = { fue: 10, des: 10, con: 10, int: 10, sab: 10, car: 10 };
                 if (charData.stats && typeof charData.stats === 'object') {
@@ -1359,7 +1421,7 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
             const apodo = colMap["apodo"] !== undefined ? row[colMap["apodo"]].trim() : "";
             
             const clasesRaw = colMap["clases"] !== undefined ? row[colMap["clases"]].trim() : "";
-            const clases = clasesRaw.split(",").map(c => c.trim()).filter(c => c);
+            const clases = parseStringList(clasesRaw);
 
             const desc = colMap["descripcion"] !== undefined ? row[colMap["descripcion"]].trim() : "";
             
@@ -1369,7 +1431,7 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
             }
 
             const galeriaRaw = colMap["galeria"] !== undefined ? row[colMap["galeria"]].trim() : "";
-            const galeria = galeriaRaw.split(",").map(g => g.trim()).filter(g => g);
+            const galeria = parseStringList(galeriaRaw);
 
             function parseStat(val) {
                 if (!val) return 10;
@@ -1434,6 +1496,19 @@ app.get("/html/img/uploads/avatars/:filename", (req, res) => {
 });
 
 app.get("/html/img/uploads/galleries/:filename", (req, res) => {
+    const filename = req.params.filename;
+    const filePath = path.join(GALLERIES_DIR, filename);
+    if (fs.existsSync(filePath)) {
+        return res.sendFile(filePath);
+    }
+    const fallbackPath = path.join(BASE_DIR, "html", "img", "uploads", "galleries", filename);
+    if (fs.existsSync(fallbackPath)) {
+        return res.sendFile(fallbackPath);
+    }
+    return res.status(404).send("Imagen no encontrada");
+});
+
+app.get("/html/img/uploads/gallerys/:filename", (req, res) => {
     const filename = req.params.filename;
     const filePath = path.join(GALLERIES_DIR, filename);
     if (fs.existsSync(filePath)) {
