@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
@@ -37,20 +38,15 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// --- SISTEMA DE CONTRASEÑAS SEGURAS (SHA256 con PBKDF2 y Sal) ---
-function hashPassword(password) {
-    const salt = crypto.randomBytes(16);
-    const hash = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
-    return `${salt.toString('hex')}:${hash.toString('hex')}`;
+// --- SISTEMA DE CONTRASEÑAS SEGURAS (bcrypt) ---
+async function hashPassword(password) {
+    const saltRounds = 12;
+    return await bcrypt.hash(password, saltRounds);
 }
 
-function verifyPassword(password, storedHash) {
+async function verifyPassword(password, storedHash) {
     try {
-        const [saltHex, hashHex] = storedHash.split(':');
-        const salt = Buffer.from(saltHex, 'hex');
-        const expectedHash = Buffer.from(hashHex, 'hex');
-        const hash = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
-        return crypto.timingSafeEqual(hash, expectedHash);
+        return await bcrypt.compare(password, storedHash);
     } catch (error) {
         return false;
     }
@@ -360,7 +356,7 @@ async function initDb() {
         if (u.username === envAdminUser || u.id === "usr_admin00") {
             if (process.env.ADMIN_USERNAME || process.env.ADMIN_PASSWORD) {
                 u.username = envAdminUser;
-                u.password_hash = hashPassword(envAdminPass);
+                u.password_hash = await hashPassword(envAdminPass);
                 u.role = "admin";
             }
             adminFound = true;
@@ -371,7 +367,7 @@ async function initDb() {
         const adminUser = {
             "id": "usr_admin00",
             "username": envAdminUser,
-            "password_hash": hashPassword(envAdminPass),
+            "password_hash": await hashPassword(envAdminPass),
             "role": "admin",
             "created_at": new Date().toISOString().split('.')[0] + 'Z'
         };
@@ -456,7 +452,7 @@ app.post("/api/auth/login", async (req, res) => {
     const usuarios = await readJsonFile(USERS_FILE, []);
     for (let u of usuarios) {
         if (u.username.toLowerCase() === username.toLowerCase()) {
-            if (verifyPassword(password, u.password_hash)) {
+            if (await verifyPassword(password, u.password_hash)) {
                 // Crear token con expiración de 7 días
                 const tokenData = {
                     sub: u.username,
@@ -500,7 +496,7 @@ app.post("/api/auth/register", async (req, res) => {
     const newUser = {
         id: `usr_${crypto.randomBytes(4).toString('hex')}`,
         username: usernameClean,
-        password_hash: hashPassword(password),
+        password_hash: await hashPassword(password),
         role: "user",
         created_at: new Date().toISOString().split('.')[0] + 'Z'
     };
@@ -568,7 +564,7 @@ app.post("/api/admin/usuarios", authenticateToken, requireAdmin, async (req, res
     const newUser = {
         id: `usr_${crypto.randomBytes(4).toString('hex')}`,
         username,
-        password_hash: hashPassword(password),
+        password_hash: await hashPassword(password),
         role,
         created_at: new Date().toISOString().split('.')[0] + 'Z'
     };
