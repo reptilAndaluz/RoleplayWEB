@@ -1356,6 +1356,101 @@ function parseCSV(contentStr) {
     return { lines, delimiter };
 }
 
+
+const urlModule = require('url');
+
+async function downloadExternalImage(imageUrl, destDir) {
+    if (!imageUrl || typeof imageUrl !== 'string') return null;
+    
+    // Si no empieza con http:// o https://, ya es una ruta local, no hacemos nada
+    if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+        return imageUrl;
+    }
+
+    return new Promise((resolve) => {
+        try {
+            const parsedUrl = urlModule.parse(imageUrl);
+            const protocol = parsedUrl.protocol === 'https:' ? https : http;
+            
+            // Bypass SSL validation
+            const agent = parsedUrl.protocol === 'https:' ? new https.Agent({ rejectUnauthorized: false }) : undefined;
+            
+            const options = {
+                protocol: parsedUrl.protocol,
+                hostname: parsedUrl.hostname,
+                port: parsedUrl.port,
+                path: parsedUrl.path,
+                method: 'GET',
+                agent: agent,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                },
+                timeout: 5000
+            };
+
+            const req = protocol.request(options, (res) => {
+                if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                    let redirectUrl = res.headers.location;
+                    if (!redirectUrl.startsWith('http')) {
+                        redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${redirectUrl}`;
+                    }
+                    downloadExternalImage(redirectUrl, destDir).then(resolve);
+                    return;
+                }
+
+                if (res.statusCode !== 200) {
+                    resolve(null);
+                    return;
+                }
+
+                const contentType = res.headers['content-type'] || '';
+                let ext = '.jpg';
+                if (contentType.includes('image/png')) ext = '.png';
+                else if (contentType.includes('image/gif')) ext = '.gif';
+                else if (contentType.includes('image/webp')) ext = '.webp';
+                else if (contentType.includes('image/jpeg')) ext = '.jpg';
+                else {
+                    const urlExt = path.extname(parsedUrl.pathname).toLowerCase();
+                    if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(urlExt)) {
+                        ext = urlExt;
+                    }
+                }
+
+                const filename = crypto.randomBytes(16).toString('hex') + ext;
+                const filePath = path.join(destDir, filename);
+                const fileStream = fs.createWriteStream(filePath);
+
+                res.pipe(fileStream);
+
+                fileStream.on('finish', () => {
+                    fileStream.close();
+                    const folderName = destDir.endsWith('avatars') ? 'avatars' : 'galleries';
+                    resolve(`/html/img/uploads/${folderName}/${filename}`);
+                });
+
+                fileStream.on('error', (err) => {
+                    fs.unlink(filePath, () => {});
+                    resolve(null);
+                });
+            });
+
+            req.on('error', (e) => {
+                resolve(null);
+            });
+
+            req.on('timeout', () => {
+                req.destroy();
+                resolve(null);
+            });
+
+            req.end();
+        } catch (e) {
+            resolve(null);
+        }
+    });
+}
+
+
 const memoryUpload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 }
@@ -1405,7 +1500,25 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
                 }
 
                 let clases = parseStringList(charData.clases);
-                let galeria = parseStringList(charData.galeria);
+                let galeriaRaw = parseStringList(charData.galeria);
+
+                let foto_principal = "/html/img/default-avatar.svg";
+                if (charData.foto_principal) {
+                    const downloaded = await downloadExternalImage(charData.foto_principal, AVATARS_DIR);
+                    foto_principal = downloaded || "/html/img/default-avatar.svg";
+                }
+
+                const galeria = [];
+                if (galeriaRaw && Array.isArray(galeriaRaw)) {
+                    for (let imgUrl of galeriaRaw) {
+                        const downloaded = await downloadExternalImage(imgUrl, GALLERIES_DIR);
+                        if (downloaded) {
+                            galeria.push(downloaded);
+                        } else {
+                            galeria.push(imgUrl);
+                        }
+                    }
+                }
 
                 let stats = { fue: 10, des: 10, con: 10, int: 10, sab: 10, car: 10 };
                 if (charData.stats && typeof charData.stats === 'object') {
@@ -1424,7 +1537,7 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
                     campana: campanaClean,
                     clases: clases,
                     descripcion_habilidades: charData.descripcion_habilidades || "",
-                    foto_principal: charData.foto_principal || "/html/img/default-avatar.svg",
+                    foto_principal: foto_principal,
                     galeria: galeria,
                     stats: stats,
                     created_at: new Date().toISOString().split('.')[0] + 'Z'
@@ -1515,10 +1628,22 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
             let foto = colMap["foto_principal"] !== undefined ? row[colMap["foto_principal"]].trim() : "";
             if (!foto) {
                 foto = "/html/img/default-avatar.svg";
+            } else {
+                const downloaded = await downloadExternalImage(foto, AVATARS_DIR);
+                foto = downloaded || "/html/img/default-avatar.svg";
             }
 
             const galeriaRaw = colMap["galeria"] !== undefined ? row[colMap["galeria"]].trim() : "";
-            const galeria = parseStringList(galeriaRaw);
+            const galeriaItems = parseStringList(galeriaRaw);
+            const galeria = [];
+            for (let imgUrl of galeriaItems) {
+                const downloaded = await downloadExternalImage(imgUrl, GALLERIES_DIR);
+                if (downloaded) {
+                    galeria.push(downloaded);
+                } else {
+                    galeria.push(imgUrl);
+                }
+            }
 
             function parseStat(val) {
                 if (!val) return 10;
