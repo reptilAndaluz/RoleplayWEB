@@ -25,3 +25,18 @@ data/personajes.json
 data/sesiones.json
 data/.secret_key
 html/uploads/
+
+# Environment secrets
+.env
+
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
