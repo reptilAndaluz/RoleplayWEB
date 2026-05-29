@@ -186,116 +186,27 @@ async function initPostgresSchema() {
     }
 }
 
-// --- CONEXIÓN OPCIONAL A MONGODB ---
-const MONGODB_URI = process.env.MONGODB_URI;
-let mongoDb = null;
-let mongoClient = null;
 
-async function connectMongo() {
-    if (MONGODB_URI) {
-        try {
-            const { MongoClient } = require('mongodb');
-            mongoClient = new MongoClient(MONGODB_URI, { serverSelectionTimeoutMS: 4000 });
-            await mongoClient.connect();
-            await mongoClient.db("admin").command({ ping: 1 });
-            
-            let dbName = "gremio_heroes";
-            const parsedDb = mongoClient.options.dbName;
-            if (parsedDb) dbName = parsedDb;
-            
-            mongoDb = mongoClient.db(dbName);
-            console.log("Conexión exitosa a base de datos persistente MongoDB en la nube!");
-        } catch (e) {
-            console.warn(`Alerta: Error al conectar a MongoDB (cayendo a archivos locales): ${e.message}`);
-            mongoDb = null;
-        }
-    }
-}
 
-// --- ADAPTADOR DE PERSISTENCIA POLIMÓRFICO ---
+// --- ADAPTADOR DE PERSISTENCIA POLIMÓRFICO (Exclusivo PostgreSQL) ---
 async function readJsonFile(filepath, defaultValue) {
     const filename = path.basename(filepath);
 
-    // 1. Intentar leer desde PostgreSQL (MÁXIMA PRIORIDAD)
     if (pgPool !== null) {
         try {
             if (filename === "config.json") {
                 const res = await pgPool.query('SELECT * FROM config LIMIT 1');
                 let doc = res.rows[0] || null;
-                if (!doc && fs.existsSync(filepath)) {
-                    try {
-                        const localData = JSON.parse(fs.readFileSync(filepath, 'utf8'));
-                        if (localData) {
-                            await pgPool.query(
-                                'INSERT INTO config (titulo, descripcion, tema, logo) VALUES ($1, $2, $3, $4)',
-                                [localData.titulo, localData.descripcion || "", localData.tema, localData.logo || ""]
-                            );
-                            return localData;
-                        }
-                    } catch (e) {}
-                }
                 return doc !== null ? { titulo: doc.titulo, descripcion: doc.descripcion, tema: doc.tema, logo: doc.logo } : defaultValue;
             } else if (filename === "usuarios.json") {
                 const res = await pgPool.query('SELECT * FROM usuarios');
-                let rows = res.rows;
-                if (rows.length === 0 && fs.existsSync(filepath)) {
-                    try {
-                        const localData = JSON.parse(fs.readFileSync(filepath, 'utf8'));
-                        if (localData && localData.length > 0) {
-                            for (let u of localData) {
-                                await pgPool.query(
-                                    'INSERT INTO usuarios (id, username, password_hash, role, created_at) VALUES ($1, $2, $3, $4, $5)',
-                                    [u.id, u.username, u.password_hash, u.role, u.created_at]
-                                );
-                            }
-                            return localData;
-                        }
-                    } catch (e) {}
-                }
-                return rows;
+                return res.rows;
             } else if (filename === "personajes.json") {
                 const res = await pgPool.query('SELECT * FROM personajes');
-                let rows = res.rows;
-                if (rows.length === 0 && fs.existsSync(filepath)) {
-                    try {
-                        const localData = JSON.parse(fs.readFileSync(filepath, 'utf8'));
-                        if (localData && localData.length > 0) {
-                            for (let p of localData) {
-                                await pgPool.query(
-                                    'INSERT INTO personajes (id, user_id, nombre, apodo, campana, clases, descripcion_habilidades, foto_principal, galeria, stats, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)',
-                                    [p.id, p.user_id, p.nombre, p.apodo || "", p.campana, JSON.stringify(p.clases || []), p.descripcion_habilidades || "", p.foto_principal || "", JSON.stringify(p.galeria || []), JSON.stringify(p.stats || {}), p.created_at]
-                                );
-                            }
-                            return localData;
-                        }
-                    } catch (e) {}
-                }
-                return rows;
+                return res.rows;
             } else if (filename === "sesiones.json") {
                 const res = await pgPool.query('SELECT * FROM sesiones');
                 let rows = res.rows;
-                if (rows.length === 0 && fs.existsSync(filepath)) {
-                    try {
-                        const localData = JSON.parse(fs.readFileSync(filepath, 'utf8'));
-                        if (localData && localData.length > 0) {
-                            for (let s of localData) {
-                                await pgPool.query(
-                                    'INSERT INTO sesiones (id, nombre, descripcion, dm_id, dm_username, created_at) VALUES ($1, $2, $3, $4, $5, $6)',
-                                    [s.id, s.nombre, s.descripcion || "", s.dm_id, s.dm_username, s.created_at]
-                                );
-                                if (s.personajes && s.personajes.length > 0) {
-                                    for (let cid of s.personajes) {
-                                        await pgPool.query(
-                                            'INSERT INTO sesion_personajes (session_id, character_id) VALUES ($1, $2)',
-                                            [s.id, cid]
-                                        );
-                                    }
-                                }
-                            }
-                            return localData;
-                        }
-                    } catch (e) {}
-                }
                 // Enlazar personajes participantes de la tabla junction relacional
                 for (let s of rows) {
                     const charRes = await pgPool.query('SELECT character_id FROM sesion_personajes WHERE session_id = $1', [s.id]);
@@ -304,52 +215,12 @@ async function readJsonFile(filepath, defaultValue) {
                 return rows;
             }
         } catch (e) {
-            console.warn(`Error leyendo de PostgreSQL: ${e.message}. Cayendo a MongoDB / Disco.`);
+            console.error(`Error crítico leyendo de PostgreSQL: ${e.message}`);
         }
+    } else {
+        console.error("Error crítico: Conexión a PostgreSQL no inicializada. Servidor degradado.");
     }
 
-    // 2. Intentar leer desde MongoDB (Segunda prioridad)
-    if (mongoDb !== null) {
-        try {
-            const collName = filename.replace(".json", "");
-            if (collName === "config") {
-                const doc = await mongoDb.collection("config").findOne({}, { projection: { _id: 0 } });
-                if (!doc && fs.existsSync(filepath)) {
-                    try {
-                        const localData = JSON.parse(fs.readFileSync(filepath, 'utf8'));
-                        if (localData) {
-                            await mongoDb.collection("config").insertOne(localData);
-                            return localData;
-                        }
-                    } catch (e) {}
-                }
-                return doc !== null ? doc : defaultValue;
-            } else {
-                const res = await mongoDb.collection(collName).find({}, { projection: { _id: 0 } }).toArray();
-                if ((!res || res.length === 0) && fs.existsSync(filepath)) {
-                    try {
-                        const localData = JSON.parse(fs.readFileSync(filepath, 'utf8'));
-                        if (localData && localData.length > 0) {
-                            await mongoDb.collection(collName).insertMany(localData);
-                            return localData;
-                        }
-                    } catch (e) {}
-                }
-                return res || [];
-            }
-        } catch (e) {
-            console.warn(`Error al leer de MongoDB: ${e.message}. Cayendo a copia local.`);
-        }
-    }
-
-    // 3. Fallback local en disco
-    if (fs.existsSync(filepath)) {
-        try {
-            return JSON.parse(fs.readFileSync(filepath, 'utf8'));
-        } catch (e) {
-            return defaultValue;
-        }
-    }
     return defaultValue;
 }
 
@@ -448,37 +319,17 @@ async function writeJsonFile(filepath, data) {
                 }
             }
             await client.query('COMMIT');
-            return;
         } catch (e) {
             await client.query('ROLLBACK');
-            console.warn(`Error escribiendo en PostgreSQL: ${e.message}. Cayendo a MongoDB / Disco.`);
+            console.error(`Error crítico escribiendo en PostgreSQL: ${e.message}`);
         } finally {
             client.release();
         }
+    } else {
+        console.error("Error crítico: Conexión a PostgreSQL no inicializada. No se pueden guardar los datos.");
     }
 
-    // 2. Intentar escribir en MongoDB
-    if (mongoDb !== null) {
-        try {
-            const collName = filename.replace(".json", "");
-            await mongoDb.collection(collName).deleteMany({});
-            if (collName === "config") {
-                if (data && Object.keys(data).length > 0) {
-                    await mongoDb.collection("config").insertOne(data);
-                }
-            } else {
-                if (data && data.length > 0) {
-                    await mongoDb.collection(collName).insertMany(data);
-                }
-            }
-            return;
-        } catch (e) {
-            console.warn(`Error al escribir en MongoDB: ${e.message}. Escribiendo copia en archivo local.`);
-        }
-    }
 
-    // 3. Fallback local en disco
-    fs.writeFileSync(filepath, JSON.stringify(data, null, 4), 'utf8');
 }
 
 // Inicializar archivos con datos por defecto
@@ -1224,7 +1075,7 @@ app.get("/api/personajes/export/csv", authenticateToken, async (req, res) => {
         personajes = personajes.filter(p => p.user_id === req.user.id);
     }
 
-    const cabeceras = ["Nombre", "Apodo", "Campana", "Clases", "Descripcion_Habilidades", "Foto_Principal", "Galeria", "FUE", "DES", "CON", "INT", "SAB", "CAR"];
+    const cabeceras = ["ID_Usuario", "Nombre", "Apodo", "Campana", "Clases", "Descripcion_Habilidades", "Foto_Principal", "Galeria", "FUE", "DES", "CON", "INT", "SAB", "CAR"];
     let csvContent = cabeceras.join(";") + "\n";
 
     for (let p of personajes) {
@@ -1233,6 +1084,7 @@ app.get("/api/personajes/export/csv", authenticateToken, async (req, res) => {
         const stats = p.stats || {};
         
         const row = [
+            p.user_id || "",
             p.nombre || "",
             p.apodo || "",
             p.campana || "",
@@ -1482,15 +1334,24 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
                     continue;
                 }
 
+                // Restringimos la importación únicamente a los personajes propios del usuario (incluso si es admin)
+                if (charData.user_id && charData.user_id !== req.user.id) {
+                    continue;
+                }
+
+                // Si es administrador, conservamos el user_id original del archivo (si viene), de lo contrario asignamos el del importador
+                const targetUserId = (req.user.role === "admin" && charData.user_id) ? charData.user_id : req.user.id;
+
                 const nombreClean = charData.nombre.trim();
                 const campanaClean = charData.campana.trim();
 
                 // Evitar duplicados
                 const esDuplicado = personajesExistentes.some(p => 
-                    p.user_id === req.user.id && 
+                    p.user_id === targetUserId && 
                     p.nombre.toLowerCase().trim() === nombreClean.toLowerCase() && 
                     p.campana.toLowerCase().trim() === campanaClean.toLowerCase()
                 ) || nuevosPersonajes.some(p => 
+                    p.user_id === targetUserId &&
                     p.nombre.toLowerCase().trim() === nombreClean.toLowerCase() && 
                     p.campana.toLowerCase().trim() === campanaClean.toLowerCase()
                 );
@@ -1531,7 +1392,7 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
 
                 const nuevo = {
                     id: `char_${crypto.randomBytes(4).toString('hex')}`,
-                    user_id: req.user.id,
+                    user_id: targetUserId,
                     nombre: nombreClean,
                     apodo: charData.apodo || "",
                     campana: campanaClean,
@@ -1573,7 +1434,8 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
         // Mapear columnas
         const colMap = {};
         cabecerasClean.forEach((h, idx) => {
-            if (h === "nombre" || h === "name") colMap["nombre"] = idx;
+            if (h === "idusuario" || h === "user_id" || h === "userid") colMap["user_id"] = idx;
+            else if (h === "nombre" || h === "name") colMap["nombre"] = idx;
             else if (h === "apodo" || h === "nickname") colMap["apodo"] = idx;
             else if (h === "campana" || h === "campaign") colMap["campana"] = idx;
             else if (h === "clases" || h === "classes") colMap["clases"] = idx;
@@ -1612,12 +1474,23 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
                 continue;
             }
 
+            const csvUserId = getCell("user_id");
+
+            // Restringimos la importación únicamente a los personajes propios del usuario (incluso si es admin)
+            if (csvUserId && csvUserId !== req.user.id) {
+                continue;
+            }
+
+            // Si es administrador, conservamos el user_id original del archivo (si viene), de lo contrario asignamos el del importador
+            const targetUserId = (req.user.role === "admin" && csvUserId) ? csvUserId : req.user.id;
+
             // Evitar duplicados
             const esDuplicado = personajesExistentes.some(p => 
-                p.user_id === req.user.id && 
+                p.user_id === targetUserId && 
                 p.nombre.toLowerCase().trim() === nombre.toLowerCase() && 
                 p.campana.toLowerCase().trim() === campana.toLowerCase()
             ) || nuevosPersonajes.some(p => 
+                p.user_id === targetUserId &&
                 p.nombre.toLowerCase().trim() === nombre.toLowerCase() && 
                 p.campana.toLowerCase().trim() === campana.toLowerCase()
             );
@@ -1670,7 +1543,7 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
 
             const nuevo = {
                 id: `char_${crypto.randomBytes(4).toString('hex')}`,
-                user_id: req.user.id,
+                user_id: targetUserId,
                 nombre,
                 apodo,
                 campana,
@@ -1755,7 +1628,6 @@ const HOST = '0.0.0.0';
 
 async function startServer() {
     await connectPostgres();
-    await connectMongo();
     await initDb();
 
     const sslKey = path.join(BASE_DIR, "key.pem");
