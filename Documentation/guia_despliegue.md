@@ -8,7 +8,7 @@ Esta guía detalla los pasos necesarios para desplegar y ejecutar el **Portal de
 
 * **Backend**: Node.js (Express.js) actuando como una API REST robusta y rápida.
 * **Frontend**: HTML5, CSS3 vainilla y JavaScript asíncrono servidos estáticamente.
-* **Persistencia**: **PostgreSQL** (alojado en la nube, p.ej. Supabase) como fuente única y exclusiva de verdad. Almacenamiento de archivos binarios e imágenes localmente en `html/img/uploads/`.
+* **Persistencia**: **PostgreSQL** (alojado en la nube, p.ej. Supabase) como fuente única y exclusiva de verdad. La aplicación es totalmente *Stateless*: las imágenes se procesan en memoria RAM y se guardan directamente como texto Base64 dentro de la base de datos, eliminando la dependencia de carpetas locales.
 * **Seguridad**: Autenticación vía JWT (JSON Web Tokens) y contraseñas cifradas en servidor (PBKDF2 SHA-256).
 
 ---
@@ -72,4 +72,6 @@ Esta guía detalla los pasos necesarios para desplegar y ejecutar el **Portal de
 ---
 
 ## Notas Post-Migración
-Si provienes de una versión anterior del repositorio, ten en cuenta que **MongoDB y los archivos JSON locales (`data/*.json`) ya no tienen ningún uso**. El servidor no creará respaldos en el disco duro ni tiene mecanismos de fallback; depende 100% de la disponibilidad de la base de datos PostgreSQL definida en el archivo `.env`.
+Si provienes de una versión anterior del repositorio, ten en cuenta los siguientes cambios arquitectónicos drásticos:
+1. **Bases de datos locales eliminadas:** MongoDB y los archivos JSON locales (`data/*.json`) ya no tienen ningún uso. El servidor depende 100% de la disponibilidad de la base de datos PostgreSQL definida en el archivo `.env`.
+2. **Archivos de imagen obsoletos:** La carpeta local `html/img/uploads/` ya no se utiliza. El sistema es ahora *Stateless* (Sin Estado) y todas las imágenes que se suban se transformarán matemáticamente a cadenas de texto Base64 para guardarse y servirse directamente desde PostgreSQL.
