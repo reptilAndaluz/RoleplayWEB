@@ -1594,12 +1594,20 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
 
         for (let i = 1; i < lines.length; i++) {
             const row = lines[i];
-            if (!row || row.length <= Math.max(...Object.values(colMap))) {
+            if (!row || row.length === 0) {
                 continue;
             }
 
-            const nombre = row[colMap["nombre"]].trim();
-            const campana = row[colMap["campana"]].trim();
+            const getCell = (key) => {
+                const idx = colMap[key];
+                if (idx === undefined || idx >= row.length || row[idx] === undefined || row[idx] === null) {
+                    return "";
+                }
+                return String(row[idx]).trim();
+            };
+
+            const nombre = getCell("nombre");
+            const campana = getCell("campana");
             if (!nombre || !campana) {
                 continue;
             }
@@ -1618,14 +1626,14 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
                 continue; // Saltar duplicado
             }
 
-            const apodo = colMap["apodo"] !== undefined ? row[colMap["apodo"]].trim() : "";
+            const apodo = getCell("apodo");
             
-            const clasesRaw = colMap["clases"] !== undefined ? row[colMap["clases"]].trim() : "";
+            const clasesRaw = getCell("clases");
             const clases = parseStringList(clasesRaw);
 
-            const desc = colMap["descripcion"] !== undefined ? row[colMap["descripcion"]].trim() : "";
+            const desc = getCell("descripcion");
             
-            let foto = colMap["foto_principal"] !== undefined ? row[colMap["foto_principal"]].trim() : "";
+            let foto = getCell("foto_principal");
             if (!foto) {
                 foto = "/html/img/default-avatar.svg";
             } else {
@@ -1633,7 +1641,7 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
                 foto = downloaded || "/html/img/default-avatar.svg";
             }
 
-            const galeriaRaw = colMap["galeria"] !== undefined ? row[colMap["galeria"]].trim() : "";
+            const galeriaRaw = getCell("galeria");
             const galeriaItems = parseStringList(galeriaRaw);
             const galeria = [];
             for (let imgUrl of galeriaItems) {
@@ -1652,12 +1660,12 @@ app.post("/api/personajes/import", authenticateToken, memoryUpload.single('file'
             }
 
             const stats = {
-                fue: colMap["fue"] !== undefined ? parseStat(row[colMap["fue"]]) : 10,
-                des: colMap["des"] !== undefined ? parseStat(row[colMap["des"]]) : 10,
-                con: colMap["con"] !== undefined ? parseStat(row[colMap["con"]]) : 10,
-                int: colMap["int"] !== undefined ? parseStat(row[colMap["int"]]) : 10,
-                sab: colMap["sab"] !== undefined ? parseStat(row[colMap["sab"]]) : 10,
-                car: colMap["car"] !== undefined ? parseStat(row[colMap["car"]]) : 10
+                fue: parseStat(getCell("fue")),
+                des: parseStat(getCell("des")),
+                con: parseStat(getCell("con")),
+                int: parseStat(getCell("int")),
+                sab: parseStat(getCell("sab")),
+                car: parseStat(getCell("car"))
             };
 
             const nuevo = {
