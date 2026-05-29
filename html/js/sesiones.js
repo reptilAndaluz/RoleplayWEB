@@ -193,7 +193,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (sessionCharacters.length === 0) {
       grid.innerHTML = `
         <div style="grid-column: 1 / -1; padding: 30px; text-align: center; color: var(--text-muted);">
-          🛡️ Ningún héroe se ha alistado en esta campaña todavía.
+          Ningún héroe se ha alistado en esta campaña todavía.
         </div>
       `;
     } else {
@@ -395,7 +395,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // ACCIÓN: Disolver una sesión
   async function confirmDeleteSession(sessionId) {
-    if (!confirm("⚠️ ¿Estás seguro de que deseas disolver esta sesión? Todos los personajes alistados serán devueltos a los anales individuales.")) return;
+    if (!confirm("¿Estás seguro de que deseas disolver esta sesión? Todos los personajes alistados serán devueltos a los anales individuales.")) return;
 
     try {
       const response = await Auth.fetch(`/api/sesiones/${sessionId}`, {

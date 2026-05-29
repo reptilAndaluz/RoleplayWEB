@@ -136,13 +136,13 @@ const Auth = {
     const toast = document.createElement("div");
     toast.className = `toast ${type}`;
 
-    let icon = "📜";
-    if (type === "success") icon = "✨";
-    if (type === "error") icon = "⚠️";
+    let label = "[Info] ";
+    if (type === "success") label = "[Éxito] ";
+    if (type === "error") label = "[Error] ";
 
     toast.innerHTML = `
       <div style="display: flex; align-items: center; gap: 10px;">
-        <span style="font-size: 1.25rem;">${icon}</span>
+        <span style="font-weight: bold;">${label}</span>
         <span>${message}</span>
       </div>
       <span style="cursor: pointer; opacity: 0.6; font-weight: bold;" onclick="this.parentElement.remove()">&times;</span>

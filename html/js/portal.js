@@ -159,7 +159,7 @@ async function loadCharacters() {
   } catch (e) {
     grid.innerHTML = `
       <div class="empty-state">
-        <div class="empty-state-icon">⚠️</div>
+        <div class="empty-state-icon">[!]</div>
         <h3>No se pudo acceder a las Crónicas</h3>
         <p>Ha ocurrido una interferencia astral al leer el archivo. Reinténtalo más tarde.</p>
       </div>

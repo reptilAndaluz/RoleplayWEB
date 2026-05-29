@@ -42,7 +42,7 @@ async function loadCharacterDetail(charId) {
     console.error(e);
     container.innerHTML = `
       <div style="padding: 40px; text-align: center;">
-        <span style="font-size: 3rem; opacity: 0.8;">⚠️</span>
+        <span style="font-size: 3rem; opacity: 0.8;">[!]</span>
         <h3 style="font-family: 'Cinzel', serif; color: var(--primary); margin-top: 15px;">Ficha Inaccesible</h3>
         <p style="color: var(--text-muted); margin-top: 8px;">${e.message || "Ha ocurrido una interferencia astral al leer el registro."}</p>
         <a href="/html/portal.html" class="btn btn-secondary" style="margin-top: 20px; display: inline-block;">Volver a las Crónicas</a>
