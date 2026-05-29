@@ -102,10 +102,10 @@ async function connectPostgres() {
             });
             // Probar conexión
             await pgPool.query('SELECT NOW()');
-            console.log("🐘 Conexión exitosa a base de datos persistente PostgreSQL en la nube!");
+            console.log("Conexión exitosa a base de datos persistente PostgreSQL en la nube!");
             await initPostgresSchema();
         } catch (e) {
-            console.error(`⚠️ Alerta: Error al conectar a PostgreSQL (cayendo a MongoDB / Disco): ${e.message}`);
+            console.error(`Alerta: Error al conectar a PostgreSQL (cayendo a MongoDB / Disco): ${e.message}`);
             pgPool = null;
         }
     }
@@ -180,7 +180,7 @@ async function initPostgresSchema() {
         await client.query('COMMIT');
     } catch (e) {
         await client.query('ROLLBACK');
-        console.error("⚠️ Error crítico inicializando esquema de base de datos en PostgreSQL:", e.message);
+        console.error("Error crítico inicializando esquema de base de datos en PostgreSQL:", e.message);
     } finally {
         client.release();
     }
@@ -204,9 +204,9 @@ async function connectMongo() {
             if (parsedDb) dbName = parsedDb;
             
             mongoDb = mongoClient.db(dbName);
-            console.log("💡 Conexión exitosa a base de datos persistente MongoDB en la nube!");
+            console.log("Conexión exitosa a base de datos persistente MongoDB en la nube!");
         } catch (e) {
-            console.warn(`⚠️ Alerta: Error al conectar a MongoDB (cayendo a archivos locales): ${e.message}`);
+            console.warn(`Alerta: Error al conectar a MongoDB (cayendo a archivos locales): ${e.message}`);
             mongoDb = null;
         }
     }
@@ -304,7 +304,7 @@ async function readJsonFile(filepath, defaultValue) {
                 return rows;
             }
         } catch (e) {
-            console.warn(`⚠️ Error leyendo de PostgreSQL: ${e.message}. Cayendo a MongoDB / Disco.`);
+            console.warn(`Error leyendo de PostgreSQL: ${e.message}. Cayendo a MongoDB / Disco.`);
         }
     }
 
@@ -338,7 +338,7 @@ async function readJsonFile(filepath, defaultValue) {
                 return res || [];
             }
         } catch (e) {
-            console.warn(`⚠️ Error al leer de MongoDB: ${e.message}. Cayendo a copia local.`);
+            console.warn(`Error al leer de MongoDB: ${e.message}. Cayendo a copia local.`);
         }
     }
 
@@ -451,7 +451,7 @@ async function writeJsonFile(filepath, data) {
             return;
         } catch (e) {
             await client.query('ROLLBACK');
-            console.warn(`⚠️ Error escribiendo en PostgreSQL: ${e.message}. Cayendo a MongoDB / Disco.`);
+            console.warn(`Error escribiendo en PostgreSQL: ${e.message}. Cayendo a MongoDB / Disco.`);
         } finally {
             client.release();
         }
@@ -473,7 +473,7 @@ async function writeJsonFile(filepath, data) {
             }
             return;
         } catch (e) {
-            console.warn(`⚠️ Error al escribir en MongoDB: ${e.message}. Escribiendo copia en archivo local.`);
+            console.warn(`Error al escribir en MongoDB: ${e.message}. Escribiendo copia en archivo local.`);
         }
     }
 
@@ -1644,5 +1644,5 @@ async function startServer() {
 }
 
 startServer().catch(err => {
-    console.error("⚠️ Error crítico al arrancar el servidor:", err);
+    console.error("Error crítico al arrancar el servidor:", err);
 });
