@@ -899,11 +899,37 @@ app.put("/api/personajes/:char_id", authenticateToken, async (req, res) => {
     return res.json(updatedChar);
 });
 
+// Helper para borrar archivos locales de imagen subidos al servidor
+function deleteLocalFile(publicUrl) {
+    if (!publicUrl || typeof publicUrl !== 'string') return;
+    
+    // Corregir posibles typos históricos en la ruta
+    let normalizedUrl = publicUrl;
+    if (normalizedUrl.includes("/img/uploads/gallerys/")) {
+        normalizedUrl = normalizedUrl.replace("/img/uploads/gallerys/", "/img/uploads/galleries/");
+    }
+
+    if (normalizedUrl.startsWith("/html/img/uploads/")) {
+        const relativePath = normalizedUrl.substring(5); // Quitar "/html"
+        const filePath = path.join(BASE_DIR, "html", relativePath);
+        
+        try {
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+                console.log(`Archivo local eliminado con éxito: ${filePath}`);
+            }
+        } catch (err) {
+            console.warn(`No se pudo borrar el archivo local ${filePath}: ${err.message}`);
+        }
+    }
+}
+
 app.delete("/api/personajes/:char_id", authenticateToken, async (req, res) => {
     const charId = req.params.char_id;
     const personajes = await readJsonFile(CHARACTERS_FILE, []);
     const filtered = [];
     let found = false;
+    let charToDelete = null;
 
     for (let p of personajes) {
         if (p.id === charId) {
@@ -911,6 +937,7 @@ app.delete("/api/personajes/:char_id", authenticateToken, async (req, res) => {
                 return res.status(403).json({ detail: "No tienes derecho a borrar este registro del gremio." });
             }
             found = true;
+            charToDelete = p;
         } else {
             filtered.push(p);
         }
@@ -918,6 +945,18 @@ app.delete("/api/personajes/:char_id", authenticateToken, async (req, res) => {
 
     if (!found) {
         return res.status(404).json({ detail: "Personaje no encontrado." });
+    }
+
+    // Borrar archivos asociados del almacenamiento local
+    if (charToDelete) {
+        if (charToDelete.foto_principal && charToDelete.foto_principal !== "/html/img/default-avatar.svg") {
+            deleteLocalFile(charToDelete.foto_principal);
+        }
+        if (charToDelete.galeria && Array.isArray(charToDelete.galeria)) {
+            for (let imgUrl of charToDelete.galeria) {
+                deleteLocalFile(imgUrl);
+            }
+        }
     }
 
     await writeJsonFile(CHARACTERS_FILE, filtered);
