@@ -32,10 +32,10 @@ app.use((req, res, next) => {
     next();
 });
 
-// Habilitar CORS y parsers de cuerpo
+// Habilitar CORS y parsers de cuerpo con mayor límite para procesar Base64 de gran tamaño
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // --- SISTEMA DE CONTRASEÑAS SEGURAS (SHA256 con PBKDF2 y Sal) ---
 function hashPassword(password) {
@@ -353,13 +353,17 @@ async function initDb() {
 
     let adminFound = false;
     for (let u of usuarios) {
-        if (u.role === "admin" || u.id === "usr_admin00") {
+        if (u.role === "admin") {
+            adminFound = true;
+        }
+        // Solo actualizamos credenciales del usuario admin si coincide con el del .env o si es el por defecto
+        if (u.username === envAdminUser || u.id === "usr_admin00") {
             if (process.env.ADMIN_USERNAME || process.env.ADMIN_PASSWORD) {
                 u.username = envAdminUser;
                 u.password_hash = hashPassword(envAdminPass);
+                u.role = "admin";
             }
             adminFound = true;
-            break;
         }
     }
 
@@ -750,37 +754,11 @@ app.put("/api/personajes/:char_id", authenticateToken, async (req, res) => {
     return res.json(updatedChar);
 });
 
-// Helper para borrar archivos locales de imagen subidos al servidor
-function deleteLocalFile(publicUrl) {
-    if (!publicUrl || typeof publicUrl !== 'string') return;
-    
-    // Corregir posibles typos históricos en la ruta
-    let normalizedUrl = publicUrl;
-    if (normalizedUrl.includes("/img/uploads/gallerys/")) {
-        normalizedUrl = normalizedUrl.replace("/img/uploads/gallerys/", "/img/uploads/galleries/");
-    }
-
-    if (normalizedUrl.startsWith("/html/img/uploads/")) {
-        const relativePath = normalizedUrl.substring(5); // Quitar "/html"
-        const filePath = path.join(BASE_DIR, "html", relativePath);
-        
-        try {
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-                console.log(`Archivo local eliminado con éxito: ${filePath}`);
-            }
-        } catch (err) {
-            console.warn(`No se pudo borrar el archivo local ${filePath}: ${err.message}`);
-        }
-    }
-}
-
 app.delete("/api/personajes/:char_id", authenticateToken, async (req, res) => {
     const charId = req.params.char_id;
     const personajes = await readJsonFile(CHARACTERS_FILE, []);
     const filtered = [];
     let found = false;
-    let charToDelete = null;
 
     for (let p of personajes) {
         if (p.id === charId) {
@@ -788,7 +766,6 @@ app.delete("/api/personajes/:char_id", authenticateToken, async (req, res) => {
                 return res.status(403).json({ detail: "No tienes derecho a borrar este registro del gremio." });
             }
             found = true;
-            charToDelete = p;
         } else {
             filtered.push(p);
         }
@@ -798,17 +775,7 @@ app.delete("/api/personajes/:char_id", authenticateToken, async (req, res) => {
         return res.status(404).json({ detail: "Personaje no encontrado." });
     }
 
-    // Borrar archivos asociados del almacenamiento local
-    if (charToDelete) {
-        if (charToDelete.foto_principal && charToDelete.foto_principal !== "/html/img/default-avatar.svg") {
-            deleteLocalFile(charToDelete.foto_principal);
-        }
-        if (charToDelete.galeria && Array.isArray(charToDelete.galeria)) {
-            for (let imgUrl of charToDelete.galeria) {
-                deleteLocalFile(imgUrl);
-            }
-        }
-    }
+    // Ya no se requiere borrar archivos locales (Imágenes Stateless Base64)
 
     await writeJsonFile(CHARACTERS_FILE, filtered);
     return res.json({ status: "success", message: "Ficha borrada exitosamente del gremio" });
@@ -996,30 +963,10 @@ app.get("/api/sesiones/:session_id/personajes", authenticateToken, async (req, r
     return res.json(sessionCharacters);
 });
 
-// --- RUTA PARA SUBIR IMÁGENES (AVATARS Y GALERÍA MULTIPART) ---
-const AVATARS_DIR = path.join(BASE_DIR, "html", "img", "uploads", "avatars");
-const GALLERIES_DIR = path.join(BASE_DIR, "html", "img", "uploads", "galleries");
-
-if (!fs.existsSync(AVATARS_DIR)) fs.mkdirSync(AVATARS_DIR, { recursive: true });
-if (!fs.existsSync(GALLERIES_DIR)) fs.mkdirSync(GALLERIES_DIR, { recursive: true });
-
+// --- RUTA PARA SUBIR IMÁGENES (CONVERSIÓN A BASE64 STATELESS) ---
 const ALLOWED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
 
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadType = req.params.upload_type;
-        if (uploadType === "avatar") {
-            cb(null, AVATARS_DIR);
-        } else {
-            cb(null, GALLERIES_DIR);
-        }
-    },
-    filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname).toLowerCase();
-        const uniqueName = crypto.randomBytes(16).toString("hex") + ext;
-        cb(null, uniqueName);
-    }
-});
+const storage = multer.memoryStorage(); // Mantener archivo en memoria RAM temporalmente
 
 const fileFilter = (req, file, cb) => {
     const uploadType = req.params.upload_type;
@@ -1048,9 +995,11 @@ app.post("/api/upload/:upload_type", authenticateToken, (req, res) => {
             return res.status(400).json({ detail: "No se proporcionó ningún archivo de imagen." });
         }
         
-        const uploadType = req.params.upload_type;
-        const folderName = uploadType === "avatar" ? "avatars" : "galleries";
-        const publicUrl = `/html/img/uploads/${folderName}/${req.file.filename}`;
+        // Convertir buffer en RAM a un string Base64 Data URI
+        const base64Data = req.file.buffer.toString('base64');
+        const mimeType = req.file.mimetype;
+        const publicUrl = `data:${mimeType};base64,${base64Data}`;
+        
         return res.json({ status: "success", url: publicUrl });
     });
 });
