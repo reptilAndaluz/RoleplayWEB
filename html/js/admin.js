@@ -249,23 +249,38 @@ async function loadUsersList() {
         `;
       } else {
         actionsHtml = `
-          <select class="form-control" style="width: auto; padding: 4px 8px; font-size: 0.75rem; height: auto; display: inline-block; margin-right: 10px; cursor: pointer; background: rgba(0,0,0,0.3); border-color: var(--surface-border); color: var(--text);" onchange="changeUserRole('${u.id}', this.value, '${u.username}')">
-            <option value="user" ${u.role === 'user' ? 'selected' : ''}>Aventurero</option>
-            <option value="dm" ${u.role === 'dm' ? 'selected' : ''}>Dungeon Master</option>
-            <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Administrador</option>
+          <select class="form-control user-role-select" style="width: auto; padding: 4px 8px; font-size: 0.75rem; height: auto; display: inline-block; margin-right: 10px; cursor: pointer; background: rgba(0,0,0,0.3); border-color: var(--surface-border); color: var(--text);">
+            <option value="user">Aventurero</option>
+            <option value="dm">Dungeon Master</option>
+            <option value="admin">Administrador</option>
           </select>
-          <button class="btn btn-danger" style="padding: 6px 12px; font-size: 0.75rem;" onclick="confirmDeleteUser('${u.id}', '${u.username}')">Abolir</button>
+          <button class="btn btn-danger delete-user-btn" style="padding: 6px 12px; font-size: 0.75rem;">Abolir</button>
         `;
       }
 
       row.innerHTML = `
         <div class="user-item-info">
-          <span class="user-item-name">${u.username}</span>
+          <span class="user-item-name"></span>
         </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
+        <div class="user-actions-container" style="display: flex; align-items: center; gap: 8px;">
           ${actionsHtml}
         </div>
       `;
+
+      row.querySelector(".user-item-name").textContent = u.username;
+
+      if (!isSelf) {
+        const select = row.querySelector(".user-role-select");
+        select.value = u.role;
+        select.addEventListener("change", (e) => {
+          changeUserRole(u.id, e.target.value, u.username);
+        });
+
+        const deleteBtn = row.querySelector(".delete-user-btn");
+        deleteBtn.addEventListener("click", () => {
+          confirmDeleteUser(u.id, u.username);
+        });
+      }
 
       container.appendChild(row);
     });

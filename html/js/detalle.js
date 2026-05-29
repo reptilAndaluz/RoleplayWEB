@@ -55,37 +55,64 @@ async function loadCharacterDetail(charId) {
 function renderDetail(char) {
   const container = document.getElementById("detail-card-content");
 
-  // Crear insignias de clases
-  const badgesHtml = char.clases.map(tag => `<span class="class-badge" style="font-size: 0.85rem; padding: 4px 12px;">${tag}</span>`).join("");
-
-  // Crear galería multimedia si existe
-  let galleryHtml = "";
-  if (char.galeria && char.galeria.length > 0) {
-    const thumbnailsHtml = char.galeria.map(imgUrl => `
-      <div class="gallery-thumbnail-container" onclick="zoomGalleryImage('${imgUrl}')" style="height: 110px;">
-        <img src="${imgUrl}" class="gallery-thumb" alt="Ilustración secundaria">
+  // Crear estructura base con marcadores de posición vacíos o IDs locales
+  container.innerHTML = `
+    <div class="detail-layout-grid">
+      
+      <!-- Columna Izquierda: Retrato y Campaña -->
+      <div class="detail-avatar-container">
+        <img id="detail-main-avatar" class="detail-big-avatar" alt="">
+        <span class="char-campaign-badge" style="position: static; font-size: 0.85rem; padding: 6px 14px;"></span>
+        <div class="char-classes-detail" style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 5px;"></div>
       </div>
-    `).join("");
 
-    galleryHtml = `
-      <div style="margin-top: 35px;">
-        <h4 class="detail-section-header">Galería de Hazañas</h4>
-        <div class="modal-gallery-grid" style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 15px; margin-top: 15px;">
-          ${thumbnailsHtml}
-        </div>
+      <!-- Columna Derecha: Historia e Ilustraciones -->
+      <div class="detail-info-container">
+        <h2 class="char-name-detail"></h2>
+        <p class="detail-apodo-txt char-apodo-detail"></p>
+        
+        <h4 class="detail-section-header">Crónicas e Habilidades</h4>
+        <p class="detail-story-desc char-desc-detail"></p>
+        
+        <div class="stats-container-detail"></div>
+        <div class="gallery-container-detail"></div>
       </div>
-    `;
+
+    </div>
+  `;
+
+  // Asignar de forma 100% segura usando textContent/src/alt
+  const mainAvatar = container.querySelector("#detail-main-avatar");
+  mainAvatar.src = char.foto_principal || '/html/img/default-avatar.svg';
+  mainAvatar.alt = `Retrato de ${char.nombre}`;
+
+  container.querySelector(".char-campaign-badge").textContent = char.campana;
+  container.querySelector(".char-name-detail").textContent = char.nombre;
+  container.querySelector(".char-apodo-detail").textContent = char.apodo || 'Aventurero sin apodo';
+  container.querySelector(".char-desc-detail").textContent = char.descripcion_habilidades;
+
+  // Renderizar clases seguras
+  const classesWrapper = container.querySelector(".char-classes-detail");
+  if (char.clases && Array.isArray(char.clases)) {
+    char.clases.forEach(tag => {
+      const badge = document.createElement("span");
+      badge.className = "class-badge";
+      badge.style.fontSize = "0.85rem";
+      badge.style.padding = "4px 12px";
+      badge.textContent = tag;
+      classesWrapper.appendChild(badge);
+    });
   }
 
-  // Crear bloque de estadísticas (Atributos Core)
-  let statsHtml = "";
+  // Renderizar estadísticas seguras
   if (char.stats) {
     const formatMod = (val) => {
       const mod = Math.floor((val - 10) / 2);
       return mod >= 0 ? `+${mod}` : `${mod}`;
     };
 
-    statsHtml = `
+    const statsWrapper = container.querySelector(".stats-container-detail");
+    statsWrapper.innerHTML = `
       <div style="margin-top: 30px; margin-bottom: 30px;">
         <h4 class="detail-section-header">Atributos del Aventurero</h4>
         <div class="stats-grid-dnd" style="margin-top: 15px;">
@@ -93,76 +120,91 @@ function renderDetail(char) {
           <div class="stat-shield-box">
             <span class="stat-label-abbr">FUE</span>
             <span class="stat-label-full">Fuerza</span>
-            <span style="font-size: 1.6rem; font-weight: bold; color: var(--text);">${char.stats.fue || 10}</span>
-            <span class="stat-modifier-badge">${formatMod(char.stats.fue || 10)}</span>
+            <span class="stat-fue-val" style="font-size: 1.6rem; font-weight: bold; color: var(--text);"></span>
+            <span class="stat-fue-mod stat-modifier-badge"></span>
           </div>
           <!-- Destreza -->
           <div class="stat-shield-box">
             <span class="stat-label-abbr">DES</span>
             <span class="stat-label-full">Destreza</span>
-            <span style="font-size: 1.6rem; font-weight: bold; color: var(--text);">${char.stats.des || 10}</span>
-            <span class="stat-modifier-badge">${formatMod(char.stats.des || 10)}</span>
+            <span class="stat-des-val" style="font-size: 1.6rem; font-weight: bold; color: var(--text);"></span>
+            <span class="stat-des-mod stat-modifier-badge"></span>
           </div>
           <!-- Constitución -->
           <div class="stat-shield-box">
             <span class="stat-label-abbr">CON</span>
             <span class="stat-label-full">Constitución</span>
-            <span style="font-size: 1.6rem; font-weight: bold; color: var(--text);">${char.stats.con || 10}</span>
-            <span class="stat-modifier-badge">${formatMod(char.stats.con || 10)}</span>
+            <span class="stat-con-val" style="font-size: 1.6rem; font-weight: bold; color: var(--text);"></span>
+            <span class="stat-con-mod stat-modifier-badge"></span>
           </div>
           <!-- Inteligencia -->
           <div class="stat-shield-box">
             <span class="stat-label-abbr">INT</span>
             <span class="stat-label-full">Inteligencia</span>
-            <span style="font-size: 1.6rem; font-weight: bold; color: var(--text);">${char.stats.int || 10}</span>
-            <span class="stat-modifier-badge">${formatMod(char.stats.int || 10)}</span>
+            <span class="stat-int-val" style="font-size: 1.6rem; font-weight: bold; color: var(--text);"></span>
+            <span class="stat-int-mod stat-modifier-badge"></span>
           </div>
           <!-- Sabiduría -->
           <div class="stat-shield-box">
             <span class="stat-label-abbr">SAB</span>
             <span class="stat-label-full">Sabiduría</span>
-            <span style="font-size: 1.6rem; font-weight: bold; color: var(--text);">${char.stats.sab || 10}</span>
-            <span class="stat-modifier-badge">${formatMod(char.stats.sab || 10)}</span>
+            <span class="stat-sab-val" style="font-size: 1.6rem; font-weight: bold; color: var(--text);"></span>
+            <span class="stat-sab-mod stat-modifier-badge"></span>
           </div>
           <!-- Carisma -->
           <div class="stat-shield-box">
             <span class="stat-label-abbr">CAR</span>
             <span class="stat-label-full">Carisma</span>
-            <span style="font-size: 1.6rem; font-weight: bold; color: var(--text);">${char.stats.car || 10}</span>
-            <span class="stat-modifier-badge">${formatMod(char.stats.car || 10)}</span>
+            <span class="stat-car-val" style="font-size: 1.6rem; font-weight: bold; color: var(--text);"></span>
+            <span class="stat-car-mod stat-modifier-badge"></span>
           </div>
         </div>
       </div>
     `;
+
+    statsWrapper.querySelector(".stat-fue-val").textContent = char.stats.fue || 10;
+    statsWrapper.querySelector(".stat-fue-mod").textContent = formatMod(char.stats.fue || 10);
+    statsWrapper.querySelector(".stat-des-val").textContent = char.stats.des || 10;
+    statsWrapper.querySelector(".stat-des-mod").textContent = formatMod(char.stats.des || 10);
+    statsWrapper.querySelector(".stat-con-val").textContent = char.stats.con || 10;
+    statsWrapper.querySelector(".stat-con-mod").textContent = formatMod(char.stats.con || 10);
+    statsWrapper.querySelector(".stat-int-val").textContent = char.stats.int || 10;
+    statsWrapper.querySelector(".stat-int-mod").textContent = formatMod(char.stats.int || 10);
+    statsWrapper.querySelector(".stat-sab-val").textContent = char.stats.sab || 10;
+    statsWrapper.querySelector(".stat-sab-mod").textContent = formatMod(char.stats.sab || 10);
+    statsWrapper.querySelector(".stat-car-val").textContent = char.stats.car || 10;
+    statsWrapper.querySelector(".stat-car-mod").textContent = formatMod(char.stats.car || 10);
   }
 
-  container.innerHTML = `
-    <div class="detail-layout-grid">
-      
-      <!-- Columna Izquierda: Retrato y Campaña -->
-      <div class="detail-avatar-container">
-        <img src="${char.foto_principal || '/html/img/default-avatar.svg'}" id="detail-main-avatar" class="detail-big-avatar" alt="Retrato de ${char.nombre}">
-        <span class="char-campaign-badge" style="position: static; font-size: 0.85rem; padding: 6px 14px;">${char.campana}</span>
-        <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 5px;">
-          ${badgesHtml}
+  // Renderizar galería segura
+  if (char.galeria && char.galeria.length > 0) {
+    const galleryWrapper = container.querySelector(".gallery-container-detail");
+    galleryWrapper.innerHTML = `
+      <div style="margin-top: 35px;">
+        <h4 class="detail-section-header">Galería de Hazañas</h4>
+        <div class="modal-gallery-grid" style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 15px; margin-top: 15px;">
         </div>
       </div>
+    `;
 
-      <!-- Columna Derecha: Historia e Ilustraciones -->
-      <div class="detail-info-container">
-        <h2>${char.nombre}</h2>
-        <p class="detail-apodo-txt">${char.apodo || 'Aventurero sin apodo'}</p>
-        
-        <h4 class="detail-section-header">Crónicas e Habilidades</h4>
-        <p class="detail-story-desc">${char.descripcion_habilidades}</p>
-        
-        ${statsHtml}
-        
-        ${galleryHtml}
-      </div>
+    const grid = galleryWrapper.querySelector(".modal-gallery-grid");
+    char.galeria.forEach(imgUrl => {
+      const thumbContainer = document.createElement("div");
+      thumbContainer.className = "gallery-thumbnail-container";
+      thumbContainer.style.height = "110px";
+      thumbContainer.addEventListener("click", () => {
+        zoomGalleryImage(imgUrl);
+      });
 
-    </div>
-  `;
+      const img = document.createElement("img");
+      img.src = imgUrl;
+      img.className = "gallery-thumb";
+      img.alt = "Ilustración secundaria";
+
+      thumbContainer.appendChild(img);
+      grid.appendChild(thumbContainer);
+    });
+  }
 }
 
 // Zoom interactivo de imágenes de la galería en el contenedor del avatar

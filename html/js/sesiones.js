@@ -84,38 +84,45 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    listWrapper.innerHTML = mySessions.map(s => `
-      <div class="dm-session-item ${selectedDmSessionId === s.id ? 'active' : ''}" data-id="${s.id}">
+    listWrapper.innerHTML = "";
+    mySessions.forEach(s => {
+      const item = document.createElement("div");
+      item.className = `dm-session-item ${selectedDmSessionId === s.id ? 'active' : ''}`;
+      item.setAttribute("data-id", s.id);
+
+      item.innerHTML = `
         <div class="dm-session-info">
-          <h4>${escapeHtml(s.nombre)}</h4>
-          <p>Aventureros asignados: <strong style="color: var(--secondary);">${s.joined_characters_count}</strong></p>
+          <h4 class="session-name"></h4>
+          <p>Aventureros asignados: <strong class="joined-count" style="color: var(--secondary);"></strong></p>
         </div>
         <div style="display: flex; gap: 8px; flex-shrink: 0;">
-          <button class="btn btn-secondary inspect-btn" style="padding: 6px 12px; font-size: 0.75rem; flex-shrink: 0; white-space: nowrap;" data-id="${s.id}">Inspeccionar</button>
-          <button class="btn btn-danger delete-btn" style="padding: 6px 12px; font-size: 0.75rem; background-color: var(--primary); flex-shrink: 0; white-space: nowrap;" data-id="${s.id}">Disolver</button>
+          <button class="btn btn-secondary inspect-btn" style="padding: 6px 12px; font-size: 0.75rem; flex-shrink: 0; white-space: nowrap;">Inspeccionar</button>
+          <button class="btn btn-danger delete-btn" style="padding: 6px 12px; font-size: 0.75rem; background-color: var(--primary); flex-shrink: 0; white-space: nowrap;">Disolver</button>
         </div>
-      </div>
-    `).join("");
+      `;
 
-    // Agregar Event Listeners
-    listWrapper.querySelectorAll(".inspect-btn").forEach(btn => {
-      btn.addEventListener("click", (e) => {
+      item.querySelector(".session-name").textContent = s.nombre;
+      item.querySelector(".joined-count").textContent = s.joined_characters_count;
+
+      const inspectBtn = item.querySelector(".inspect-btn");
+      inspectBtn.setAttribute("data-id", s.id);
+      inspectBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        inspectSession(btn.getAttribute("data-id"));
+        inspectSession(s.id);
       });
-    });
 
-    listWrapper.querySelectorAll(".delete-btn").forEach(btn => {
-      btn.addEventListener("click", (e) => {
+      const deleteBtn = item.querySelector(".delete-btn");
+      deleteBtn.setAttribute("data-id", s.id);
+      deleteBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        confirmDeleteSession(btn.getAttribute("data-id"));
+        confirmDeleteSession(s.id);
       });
-    });
 
-    listWrapper.querySelectorAll(".dm-session-item").forEach(item => {
       item.addEventListener("click", () => {
-        inspectSession(item.getAttribute("data-id"));
+        inspectSession(s.id);
       });
+
+      listWrapper.appendChild(item);
     });
 
     // Mantener la visualización de la sesión inspeccionada activada
@@ -165,60 +172,74 @@ document.addEventListener("DOMContentLoaded", async () => {
       dmDashboardSection.parentNode.insertBefore(inspectPanel, dmDashboardSection.nextSibling);
     }
 
-    let charactersHtml = "";
-    if (sessionCharacters.length === 0) {
-      charactersHtml = `
-        <div style="grid-column: 1 / -1; padding: 30px; text-align: center; color: var(--text-muted);">
-          🛡️ Ningún héroe se ha alistado en esta campaña todavía.
-        </div>
-      `;
-    } else {
-      charactersHtml = sessionCharacters.map(c => `
-        <div class="inspect-char-card card-glass" data-char-id="${c.id}">
-          <img src="${c.foto_principal || '/html/img/default-avatar.svg'}" class="inspect-char-avatar" alt="${escapeHtml(c.nombre)}">
-          <div class="inspect-char-info">
-            <h5>${escapeHtml(c.nombre)}</h5>
-            <p style="margin-bottom: 2px;">${escapeHtml(c.apodo || 'Sin apodo')}</p>
-            <p style="font-size: 0.72rem; color: var(--secondary); font-weight: bold; margin-bottom: 2px; font-family: 'Cinzel', serif;">
-              Aventurero de: ${escapeHtml(c.owner_username || 'Desconocido')}
-            </p>
-            <p style="font-size: 0.7rem; color: var(--text-muted); font-style: italic;">
-              Clase: ${c.clases.slice(0, 2).join(", ")}
-            </p>
-          </div>
-          <button class="btn btn-danger kick-btn" style="margin-left: auto; padding: 6px 12px; font-size: 0.75rem; background-color: var(--primary); flex-shrink: 0; white-space: nowrap;" data-char-id="${c.id}">Expulsar</button>
-        </div>
-      `).join("");
-    }
-
     inspectPanel.innerHTML = `
       <h3 class="panel-section-title brand-decorative" style="display: flex; justify-content: space-between; align-items: center;">
-        <span>Fichas Alistadas en: ${escapeHtml(activeSession.nombre)}</span>
-        <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.75rem;" onclick="document.getElementById('dm-session-inspect-panel').remove();">Cerrar Inspector</button>
+        <span class="panel-title-text"></span>
+        <button class="btn btn-secondary close-inspect-btn" style="padding: 6px 12px; font-size: 0.75rem;">Cerrar Inspector</button>
       </h3>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">
         Haz clic sobre la tarjeta de cualquier héroe para inspeccionar su ficha detallada, consultar sus estadísticas en tiempo real y leer sus crónicas.
       </p>
       
-      <div class="inspect-characters-grid">
-        ${charactersHtml}
-      </div>
+      <div class="inspect-characters-grid"></div>
     `;
 
-    // Event listener para expulsar a un jugador
-    inspectPanel.querySelectorAll(".kick-btn").forEach(btn => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        kickCharacterFromSession(activeSession.id, btn.getAttribute("data-char-id"));
-      });
+    inspectPanel.querySelector(".panel-title-text").textContent = `Fichas Alistadas en: ${activeSession.nombre}`;
+    inspectPanel.querySelector(".close-inspect-btn").addEventListener("click", () => {
+      inspectPanel.remove();
     });
 
-    // Event listener para inspeccionar detalle de ficha
-    inspectPanel.querySelectorAll(".inspect-char-card").forEach(card => {
-      card.addEventListener("click", () => {
-        showCharacterModal(card.getAttribute("data-char-id"));
+    const grid = inspectPanel.querySelector(".inspect-characters-grid");
+    if (sessionCharacters.length === 0) {
+      grid.innerHTML = `
+        <div style="grid-column: 1 / -1; padding: 30px; text-align: center; color: var(--text-muted);">
+          🛡️ Ningún héroe se ha alistado en esta campaña todavía.
+        </div>
+      `;
+    } else {
+      sessionCharacters.forEach(c => {
+        const charCard = document.createElement("div");
+        charCard.className = "inspect-char-card card-glass";
+        charCard.setAttribute("data-char-id", c.id);
+
+        charCard.innerHTML = `
+          <img class="inspect-char-avatar" alt="">
+          <div class="inspect-char-info">
+            <h5 class="char-name"></h5>
+            <p class="char-apodo" style="margin-bottom: 2px;"></p>
+            <p class="char-owner" style="font-size: 0.72rem; color: var(--secondary); font-weight: bold; margin-bottom: 2px; font-family: 'Cinzel', serif;">
+            </p>
+            <p class="char-classes" style="font-size: 0.7rem; color: var(--text-muted); font-style: italic;">
+            </p>
+          </div>
+          <button class="btn btn-danger kick-btn" style="margin-left: auto; padding: 6px 12px; font-size: 0.75rem; background-color: var(--primary); flex-shrink: 0; white-space: nowrap;">Expulsar</button>
+        `;
+
+        const avatarImg = charCard.querySelector(".inspect-char-avatar");
+        avatarImg.src = c.foto_principal || '/html/img/default-avatar.svg';
+        avatarImg.alt = c.nombre;
+
+        charCard.querySelector(".char-name").textContent = c.nombre;
+        charCard.querySelector(".char-apodo").textContent = c.apodo || 'Sin apodo';
+        charCard.querySelector(".char-owner").textContent = `Aventurero de: ${c.owner_username || 'Desconocido'}`;
+        charCard.querySelector(".char-classes").textContent = `Clase: ${c.clases.slice(0, 2).join(", ")}`;
+
+        // Botón expulsar
+        const kickBtn = charCard.querySelector(".kick-btn");
+        kickBtn.setAttribute("data-char-id", c.id);
+        kickBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          kickCharacterFromSession(activeSession.id, c.id);
+        });
+
+        // Click en tarjeta
+        charCard.addEventListener("click", () => {
+          showCharacterModal(c.id);
+        });
+
+        grid.appendChild(charCard);
       });
-    });
+    }
   }
 
   // RENDER: Listado General de Sesiones de la Comunidad
@@ -235,84 +256,108 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    grid.innerHTML = sessions.map(s => {
-      // Filtrar personajes del usuario que ya están en esta sesión
-      const userJoinedChar = userCharacters.find(uc => s.personajes.includes(uc.id));
+    grid.innerHTML = "";
+    sessions.forEach(s => {
+      const card = document.createElement("div");
+      card.className = "session-card card-glass";
+
+      card.innerHTML = `
+        <div class="session-card-header">
+          <h4 class="session-card-title"></h4>
+          <span class="session-card-creator"></span>
+        </div>
+        <div class="session-card-body"></div>
+        <div class="session-card-footer">
+          <span class="session-card-joined-counter"></span>
+          <div class="session-action-block" style="width: 100%; margin-top: 4px;"></div>
+        </div>
+      `;
+
+      card.querySelector(".session-card-title").textContent = s.nombre;
       
-      let actionBlock = "";
+      const creatorSpan = card.querySelector(".session-card-creator");
+      creatorSpan.textContent = "Dungeon Master: ";
+      const creatorStrong = document.createElement("strong");
+      creatorStrong.textContent = s.dm_username;
+      creatorSpan.appendChild(creatorStrong);
+
+      card.querySelector(".session-card-body").textContent = s.descripcion;
+      card.querySelector(".session-card-joined-counter").textContent = `Aventureros alistados: ${s.joined_characters_count}`;
+
+      const actionBlock = card.querySelector(".session-action-block");
+      const userJoinedChar = userCharacters.find(uc => s.personajes.includes(uc.id));
+
       if (userJoinedChar) {
-        // El usuario ya se unió a esta campaña con un héroe
-        actionBlock = `
+        actionBlock.innerHTML = `
           <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
-            <p style="font-size: 0.75rem; color: #2ecc71; text-align: center;">
-              ⚔️ Te uniste con <strong>${escapeHtml(userJoinedChar.nombre)}</strong>
+            <p class="joined-status" style="font-size: 0.75rem; color: #2ecc71; text-align: center;">
             </p>
-            <button class="btn btn-secondary leave-session-btn" style="padding: 8px; width: 100%; font-size: 0.8rem;" data-session-id="${s.id}" data-char-id="${userJoinedChar.id}">
+            <button class="btn btn-secondary leave-session-btn" style="padding: 8px; width: 100%; font-size: 0.8rem;">
               Retirar Héroe de la Partida
             </button>
           </div>
         `;
-      } else if (userCharacters.length === 0) {
-        actionBlock = `
-          <p style="font-size: 0.75rem; color: var(--text-muted); text-align: center; font-style: italic;">
-            Necesitas tener un héroe en el portal para unirte a esta campaña.
-          </p>
-        `;
-      } else {
-        // Ofrecer dropdown de sus personajes disponibles
-        const availableOptions = userCharacters.map(c => `
-          <option value="${c.id}">${escapeHtml(c.nombre)} (${c.clases.slice(0, 1).join("")})</option>
-        `).join("");
+        
+        const statusP = actionBlock.querySelector(".joined-status");
+        statusP.textContent = "⚔️ Te uniste con ";
+        const charStrong = document.createElement("strong");
+        charStrong.textContent = userJoinedChar.nombre;
+        statusP.appendChild(charStrong);
 
-        actionBlock = `
-          <div style="display: flex; gap: 8px; width: 100%;">
-            <select class="form-control join-char-select" style="flex-grow: 1; font-size: 0.8rem; height: 36px; padding: 6px; cursor: pointer;" id="join-select-${s.id}">
-              ${availableOptions}
-            </select>
-            <button class="btn join-session-btn" style="padding: 8px 16px; font-size: 0.8rem; height: 36px; flex-shrink: 0; white-space: nowrap;" data-session-id="${s.id}">
-              Unirse
-            </button>
-          </div>
-        `;
+        const leaveBtn = actionBlock.querySelector(".leave-session-btn");
+        leaveBtn.addEventListener("click", () => {
+          leaveSession(s.id, userJoinedChar.id);
+        });
+
+      } else if (userCharacters.length === 0) {
+        const p = document.createElement("p");
+        p.style.fontSize = "0.75rem";
+        p.style.color = "var(--text-muted)";
+        p.style.textAlign = "center";
+        p.style.fontStyle = "italic";
+        p.textContent = "Necesitas tener un héroe en el portal para unirte a esta campaña.";
+        actionBlock.appendChild(p);
+
+      } else {
+        const selectContainer = document.createElement("div");
+        selectContainer.style.display = "flex";
+        selectContainer.style.gap = "8px";
+        selectContainer.style.width = "100%";
+
+        const select = document.createElement("select");
+        select.className = "form-control join-char-select";
+        select.style.flexGrow = "1";
+        select.style.fontSize = "0.8rem";
+        select.style.height = "36px";
+        select.style.padding = "6px";
+        select.style.cursor = "pointer";
+
+        userCharacters.forEach(uc => {
+          const opt = document.createElement("option");
+          opt.value = uc.id;
+          opt.textContent = `${uc.nombre} (${uc.clases.slice(0, 1).join("")})`;
+          select.appendChild(opt);
+        });
+
+        const joinBtn = document.createElement("button");
+        joinBtn.className = "btn join-session-btn";
+        joinBtn.style.padding = "8px 16px";
+        joinBtn.style.fontSize = "0.8rem";
+        joinBtn.style.height = "36px";
+        joinBtn.style.flexShrink = "0";
+        joinBtn.style.whiteSpace = "nowrap";
+        joinBtn.textContent = "Unirse";
+
+        joinBtn.addEventListener("click", () => {
+          joinSession(s.id, select.value);
+        });
+
+        selectContainer.appendChild(select);
+        selectContainer.appendChild(joinBtn);
+        actionBlock.appendChild(selectContainer);
       }
 
-      return `
-        <div class="session-card card-glass">
-          <div class="session-card-header">
-            <h4 class="session-card-title">${escapeHtml(s.nombre)}</h4>
-            <span class="session-card-creator">Dungeon Master: <strong>${escapeHtml(s.dm_username)}</strong></span>
-          </div>
-          <div class="session-card-body">
-            ${escapeHtml(s.descripcion)}
-          </div>
-          <div class="session-card-footer">
-            <span class="session-card-joined-counter">Aventureros alistados: ${s.joined_characters_count}</span>
-            <div style="width: 100%; margin-top: 4px;">
-              ${actionBlock}
-            </div>
-          </div>
-        </div>
-      `;
-    }).join("");
-
-    // Event Listeners para unirse a sesiones
-    grid.querySelectorAll(".join-session-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const sessionId = btn.getAttribute("data-session-id");
-        const selectEl = document.getElementById(`join-select-${sessionId}`);
-        if (selectEl) {
-          joinSession(sessionId, selectEl.value);
-        }
-      });
-    });
-
-    // Event Listeners para salirse de sesiones
-    grid.querySelectorAll(".leave-session-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const sessionId = btn.getAttribute("data-session-id");
-        const charId = btn.getAttribute("data-char-id");
-        leaveSession(sessionId, charId);
-      });
+      grid.appendChild(card);
     });
   }
 
@@ -462,17 +507,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       <div class="inspect-modal-grid">
         <!-- Avatar y Datos básicos -->
         <div class="modal-avatar-col">
-          <img src="${char.foto_principal || '/html/img/default-avatar.svg'}" class="modal-avatar" alt="${escapeHtml(char.nombre)}">
-          <h3 style="font-family: 'Cinzel', serif; margin-top: 10px; color: #fff;">${escapeHtml(char.nombre)}</h3>
-          <span style="font-family: 'Cinzel', serif; font-size: 0.85rem; color: var(--secondary); font-style: italic; display: block; margin-bottom: 4px;">
-            ${escapeHtml(char.apodo || 'Sin apodo')}
+          <img class="modal-avatar" alt="">
+          <h3 class="modal-char-name" style="font-family: 'Cinzel', serif; margin-top: 10px; color: #fff;"></h3>
+          <span class="modal-char-apodo" style="font-family: 'Cinzel', serif; font-size: 0.85rem; color: var(--secondary); font-style: italic; display: block; margin-bottom: 4px;">
           </span>
-          <span style="font-size: 0.78rem; color: var(--text-muted); font-family: 'Cinzel', serif; display: block;">
-            Creador: <strong style="color: #fff;">${escapeHtml(char.owner_username || 'Desconocido')}</strong>
+          <span class="modal-char-owner" style="font-size: 0.78rem; color: var(--text-muted); font-family: 'Cinzel', serif; display: block;">
           </span>
           
-          <div style="display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-top: 10px;">
-            ${char.clases.map(cl => `<span class="class-badge">${escapeHtml(cl)}</span>`).join("")}
+          <div class="modal-char-badges" style="display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-top: 10px;">
           </div>
         </div>
 
@@ -483,61 +525,112 @@ document.addEventListener("DOMContentLoaded", async () => {
             <div class="stat-shield-box" style="padding: 10px;">
               <span class="stat-label-abbr">FUE</span>
               <span class="stat-label-full" style="font-size: 0.6rem;">Fuerza</span>
-              <strong style="font-size: 1.1rem; color: #fff;">${char.stats.fue}</strong>
-              <span class="stat-modifier-badge" style="position: relative; bottom: auto; left: auto; transform: none; margin: 8px auto 0 auto;">${getModText(char.stats.fue)}</span>
+              <strong class="stat-fue-val" style="font-size: 1.1rem; color: #fff;"></strong>
+              <span class="stat-fue-mod stat-modifier-badge" style="position: relative; bottom: auto; left: auto; transform: none; margin: 8px auto 0 auto;"></span>
             </div>
             <div class="stat-shield-box" style="padding: 10px;">
               <span class="stat-label-abbr">DES</span>
               <span class="stat-label-full" style="font-size: 0.6rem;">Destreza</span>
-              <strong style="font-size: 1.1rem; color: #fff;">${char.stats.des}</strong>
-              <span class="stat-modifier-badge" style="position: relative; bottom: auto; left: auto; transform: none; margin: 8px auto 0 auto;">${getModText(char.stats.des)}</span>
+              <strong class="stat-des-val" style="font-size: 1.1rem; color: #fff;"></strong>
+              <span class="stat-des-mod stat-modifier-badge" style="position: relative; bottom: auto; left: auto; transform: none; margin: 8px auto 0 auto;"></span>
             </div>
             <div class="stat-shield-box" style="padding: 10px;">
               <span class="stat-label-abbr">CON</span>
               <span class="stat-label-full" style="font-size: 0.6rem;">Constitución</span>
-              <strong style="font-size: 1.1rem; color: #fff;">${char.stats.con}</strong>
-              <span class="stat-modifier-badge" style="position: relative; bottom: auto; left: auto; transform: none; margin: 8px auto 0 auto;">${getModText(char.stats.con)}</span>
+              <strong class="stat-con-val" style="font-size: 1.1rem; color: #fff;"></strong>
+              <span class="stat-con-mod stat-modifier-badge" style="position: relative; bottom: auto; left: auto; transform: none; margin: 8px auto 0 auto;"></span>
             </div>
             <div class="stat-shield-box" style="padding: 10px;">
               <span class="stat-label-abbr">INT</span>
               <span class="stat-label-full" style="font-size: 0.6rem;">Inteligencia</span>
-              <strong style="font-size: 1.1rem; color: #fff;">${char.stats.int}</strong>
-              <span class="stat-modifier-badge" style="position: relative; bottom: auto; left: auto; transform: none; margin: 8px auto 0 auto;">${getModText(char.stats.int)}</span>
+              <strong class="stat-int-val" style="font-size: 1.1rem; color: #fff;"></strong>
+              <span class="stat-int-mod stat-modifier-badge" style="position: relative; bottom: auto; left: auto; transform: none; margin: 8px auto 0 auto;"></span>
             </div>
             <div class="stat-shield-box" style="padding: 10px;">
               <span class="stat-label-abbr">SAB</span>
               <span class="stat-label-full" style="font-size: 0.6rem;">Sabiduría</span>
-              <strong style="font-size: 1.1rem; color: #fff;">${char.stats.sab}</strong>
-              <span class="stat-modifier-badge" style="position: relative; bottom: auto; left: auto; transform: none; margin: 8px auto 0 auto;">${getModText(char.stats.sab)}</span>
+              <strong class="stat-sab-val" style="font-size: 1.1rem; color: #fff;"></strong>
+              <span class="stat-sab-mod stat-modifier-badge" style="position: relative; bottom: auto; left: auto; transform: none; margin: 8px auto 0 auto;"></span>
             </div>
             <div class="stat-shield-box" style="padding: 10px;">
               <span class="stat-label-abbr">CAR</span>
               <span class="stat-label-full" style="font-size: 0.6rem;">Carisma</span>
-              <strong style="font-size: 1.1rem; color: #fff;">${char.stats.car}</strong>
-              <span class="stat-modifier-badge" style="position: relative; bottom: auto; left: auto; transform: none; margin: 8px auto 0 auto;">${getModText(char.stats.car)}</span>
+              <strong class="stat-car-val" style="font-size: 1.1rem; color: #fff;"></strong>
+              <span class="stat-car-mod stat-modifier-badge" style="position: relative; bottom: auto; left: auto; transform: none; margin: 8px auto 0 auto;"></span>
             </div>
           </div>
 
           <h4 class="modal-section-title">Habilidades y Crónicas</h4>
           <div class="modal-desc" style="max-height: 250px; overflow-y: auto; padding-right: 8px; font-size: 0.85rem; line-height: 1.6; color: var(--text-muted);">
-            ${escapeHtml(char.descripcion_habilidades || 'Sin descripción ni crónicas registradas en los anales.')}
           </div>
           
-          ${char.galeria && char.galeria.length > 0 ? `
-            <h4 class="modal-section-title">Ilustraciones</h4>
-            <div class="modal-gallery-grid">
-              ${char.galeria.map(imgUrl => `
-                <div class="gallery-thumbnail-container">
-                  <a href="${imgUrl}" target="_blank">
-                    <img src="${imgUrl}" class="gallery-thumb" alt="Ilustración secundaria">
-                  </a>
-                </div>
-              `).join("")}
-            </div>
-          ` : ""}
+          <div class="modal-gallery-wrapper"></div>
         </div>
       </div>
     `;
+
+    const avatar = modalBody.querySelector(".modal-avatar");
+    avatar.src = char.foto_principal || '/html/img/default-avatar.svg';
+    avatar.alt = char.nombre;
+
+    modalBody.querySelector(".modal-char-name").textContent = char.nombre;
+    modalBody.querySelector(".modal-char-apodo").textContent = char.apodo || 'Sin apodo';
+    
+    const ownerSpan = modalBody.querySelector(".modal-char-owner");
+    ownerSpan.textContent = "Creador: ";
+    const ownerStrong = document.createElement("strong");
+    ownerStrong.style.color = "#fff";
+    ownerStrong.textContent = char.owner_username || 'Desconocido';
+    ownerSpan.appendChild(ownerStrong);
+
+    const badgesContainer = modalBody.querySelector(".modal-char-badges");
+    char.clases.forEach(cl => {
+      const b = document.createElement("span");
+      b.className = "class-badge";
+      b.textContent = cl;
+      badgesContainer.appendChild(b);
+    });
+
+    modalBody.querySelector(".stat-fue-val").textContent = char.stats.fue;
+    modalBody.querySelector(".stat-fue-mod").textContent = getModText(char.stats.fue);
+    modalBody.querySelector(".stat-des-val").textContent = char.stats.des;
+    modalBody.querySelector(".stat-des-mod").textContent = getModText(char.stats.des);
+    modalBody.querySelector(".stat-con-val").textContent = char.stats.con;
+    modalBody.querySelector(".stat-con-mod").textContent = getModText(char.stats.con);
+    modalBody.querySelector(".stat-int-val").textContent = char.stats.int;
+    modalBody.querySelector(".stat-int-mod").textContent = getModText(char.stats.int);
+    modalBody.querySelector(".stat-sab-val").textContent = char.stats.sab;
+    modalBody.querySelector(".stat-sab-mod").textContent = getModText(char.stats.sab);
+    modalBody.querySelector(".stat-car-val").textContent = char.stats.car;
+    modalBody.querySelector(".stat-car-mod").textContent = getModText(char.stats.car);
+
+    modalBody.querySelector(".modal-desc").textContent = char.descripcion_habilidades || 'Sin descripción ni crónicas registradas en los anales.';
+
+    if (char.galeria && char.galeria.length > 0) {
+      const galleryWrapper = modalBody.querySelector(".modal-gallery-wrapper");
+      galleryWrapper.innerHTML = `
+        <h4 class="modal-section-title">Ilustraciones</h4>
+        <div class="modal-gallery-grid"></div>
+      `;
+      const grid = galleryWrapper.querySelector(".modal-gallery-grid");
+      char.galeria.forEach(imgUrl => {
+        const container = document.createElement("div");
+        container.className = "gallery-thumbnail-container";
+        
+        const a = document.createElement("a");
+        a.href = imgUrl;
+        a.target = "_blank";
+
+        const img = document.createElement("img");
+        img.src = imgUrl;
+        img.className = "gallery-thumb";
+        img.alt = "Ilustración secundaria";
+
+        a.appendChild(img);
+        container.appendChild(a);
+        grid.appendChild(container);
+      });
+    }
 
     modal.classList.add("show");
   }

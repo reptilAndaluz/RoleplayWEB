@@ -187,22 +187,17 @@ function renderGrid(characters) {
     const card = document.createElement("div");
     card.className = "card-glass char-card";
     
-    // Crear insignias de clases
-    const badgesHtml = c.clases.map(tag => `<span class="class-badge">${tag}</span>`).join("");
-    
     card.innerHTML = `
       <div class="char-card-header">
-        <img src="${c.foto_principal || '/html/img/default-avatar.svg'}" class="char-avatar-bg" alt="Avatar difuminado">
-        <img src="${c.foto_principal || '/html/img/default-avatar.svg'}" class="char-avatar" alt="Avatar de ${c.nombre}">
-        <span class="char-campaign-badge">${c.campana}</span>
+        <img class="char-avatar-bg" alt="Avatar difuminado">
+        <img class="char-avatar" alt="">
+        <span class="char-campaign-badge"></span>
       </div>
       <div class="char-card-body">
-        <h3 class="char-name">${c.nombre}</h3>
-        <p class="char-apodo">${c.apodo || 'Aventurero Solitario'}</p>
-        <div class="char-classes">
-          ${badgesHtml}
-        </div>
-        <p class="char-desc">${c.descripcion_habilidades}</p>
+        <h3 class="char-name"></h3>
+        <p class="char-apodo"></p>
+        <div class="char-classes"></div>
+        <p class="char-desc"></p>
       </div>
       <div class="char-card-footer">
         <button class="btn btn-view" style="font-size: 0.75rem; padding: 8px 12px;">Ver Ficha</button>
@@ -210,6 +205,30 @@ function renderGrid(characters) {
         <button class="btn btn-danger btn-delete" style="font-size: 0.75rem; padding: 8px 12px;">❌</button>
       </div>
     `;
+
+    // Asignar datos de forma 100% segura usando textContent/src
+    const avatarUrl = c.foto_principal || '/html/img/default-avatar.svg';
+    card.querySelector(".char-avatar-bg").src = avatarUrl;
+    
+    const avatarImg = card.querySelector(".char-avatar");
+    avatarImg.src = avatarUrl;
+    avatarImg.alt = `Avatar de ${c.nombre}`;
+
+    card.querySelector(".char-campaign-badge").textContent = c.campana;
+    card.querySelector(".char-name").textContent = c.nombre;
+    card.querySelector(".char-apodo").textContent = c.apodo || 'Aventurero Solitario';
+    card.querySelector(".char-desc").textContent = c.descripcion_habilidades;
+
+    // Crear insignias de clases seguras
+    const classesWrapper = card.querySelector(".char-classes");
+    if (c.clases && Array.isArray(c.clases)) {
+      c.clases.forEach(tag => {
+        const badge = document.createElement("span");
+        badge.className = "class-badge";
+        badge.textContent = tag;
+        classesWrapper.appendChild(badge);
+      });
+    }
 
     // Asignar eventos de botones
     card.querySelector(".btn-view").addEventListener("click", () => {
@@ -283,12 +302,18 @@ function populateDropdownFilters() {
 
   // Rellenar campañas
   [...campañas].sort().forEach(camp => {
-    campaignFilter.innerHTML += `<option value="${camp}">${camp}</option>`;
+    const opt = document.createElement("option");
+    opt.value = camp;
+    opt.textContent = camp;
+    campaignFilter.appendChild(opt);
   });
 
   // Rellenar clases
   [...clases].sort().forEach(tag => {
-    classFilter.innerHTML += `<option value="${tag}">${tag}</option>`;
+    const opt = document.createElement("option");
+    opt.value = tag;
+    opt.textContent = tag;
+    classFilter.appendChild(opt);
   });
 
   // Restaurar selecciones previas si aún existen
