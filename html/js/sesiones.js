@@ -218,6 +218,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         const avatarImg = charCard.querySelector(".inspect-char-avatar");
         avatarImg.src = c.foto_principal || '/html/img/default-avatar.svg';
         avatarImg.alt = c.nombre;
+        avatarImg.onerror = () => {
+          avatarImg.src = '/html/img/default-avatar.svg';
+        };
 
         charCard.querySelector(".char-name").textContent = c.nombre;
         charCard.querySelector(".char-apodo").textContent = c.apodo || 'Sin apodo';
@@ -572,6 +575,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     const avatar = modalBody.querySelector(".modal-avatar");
     avatar.src = char.foto_principal || '/html/img/default-avatar.svg';
     avatar.alt = char.nombre;
+    avatar.onerror = () => {
+      avatar.src = '/html/img/default-avatar.svg';
+    };
 
     modalBody.querySelector(".modal-char-name").textContent = char.nombre;
     modalBody.querySelector(".modal-char-apodo").textContent = char.apodo || 'Sin apodo';

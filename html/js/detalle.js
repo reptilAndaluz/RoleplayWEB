@@ -85,6 +85,9 @@ function renderDetail(char) {
   const mainAvatar = container.querySelector("#detail-main-avatar");
   mainAvatar.src = char.foto_principal || '/html/img/default-avatar.svg';
   mainAvatar.alt = `Retrato de ${char.nombre}`;
+  mainAvatar.onerror = () => {
+    mainAvatar.src = '/html/img/default-avatar.svg';
+  };
 
   container.querySelector(".char-campaign-badge").textContent = char.campana;
   container.querySelector(".char-name-detail").textContent = char.nombre;

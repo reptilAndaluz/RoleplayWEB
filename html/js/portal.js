@@ -208,11 +208,20 @@ function renderGrid(characters) {
 
     // Asignar datos de forma 100% segura usando textContent/src
     const avatarUrl = c.foto_principal || '/html/img/default-avatar.svg';
-    card.querySelector(".char-avatar-bg").src = avatarUrl;
+    
+    const avatarBg = card.querySelector(".char-avatar-bg");
+    avatarBg.src = avatarUrl;
+    avatarBg.onerror = () => {
+      avatarBg.src = '/html/img/default-avatar.svg';
+    };
     
     const avatarImg = card.querySelector(".char-avatar");
     avatarImg.src = avatarUrl;
     avatarImg.alt = `Avatar de ${c.nombre}`;
+    avatarImg.onerror = () => {
+      avatarImg.src = '/html/img/default-avatar.svg';
+    };
+
 
     card.querySelector(".char-campaign-badge").textContent = c.campana;
     card.querySelector(".char-name").textContent = c.nombre;
