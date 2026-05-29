@@ -234,7 +234,7 @@ function setupActionButtons(char) {
     editBtn.className = "btn";
     editBtn.style.padding = "8px 16px";
     editBtn.style.fontSize = "0.85rem";
-    editBtn.innerText = "📝 Editar Registro";
+    editBtn.innerText = "Editar Registro";
     editBtn.addEventListener("click", () => {
       window.location.href = `/html/crearEntrada.html?id=${char.id}`;
     });
@@ -244,7 +244,7 @@ function setupActionButtons(char) {
     deleteBtn.className = "btn btn-danger";
     deleteBtn.style.padding = "8px 16px";
     deleteBtn.style.fontSize = "0.85rem";
-    deleteBtn.innerText = "❌ Abolir Ficha";
+    deleteBtn.innerText = "Abolir Ficha";
     deleteBtn.addEventListener("click", () => confirmDeleteCharacter(char.id, char.nombre));
 
     actionsGroup.appendChild(editBtn);

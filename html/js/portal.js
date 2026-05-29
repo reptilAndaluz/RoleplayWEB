@@ -201,8 +201,8 @@ function renderGrid(characters) {
       </div>
       <div class="char-card-footer">
         <button class="btn btn-view" style="font-size: 0.75rem; padding: 8px 12px;">Ver Ficha</button>
-        <button class="btn btn-secondary btn-edit" style="font-size: 0.75rem; padding: 8px 12px; border-color: rgba(255,255,255,0.2);">📝</button>
-        <button class="btn btn-danger btn-delete" style="font-size: 0.75rem; padding: 8px 12px;">❌</button>
+        <button class="btn btn-secondary btn-edit" style="font-size: 0.75rem; padding: 8px 12px; border-color: rgba(255,255,255,0.2);">Editar</button>
+        <button class="btn btn-danger btn-delete" style="font-size: 0.75rem; padding: 8px 12px;">Eliminar</button>
       </div>
     `;
 
