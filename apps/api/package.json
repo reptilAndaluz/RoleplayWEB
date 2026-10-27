@@ -1,0 +1,23 @@
+{
+  "name": "@rol/api",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@rol/shared": "*",
+    "dotenv": "16.4.5",
+    "fastify": "5.12.7",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "pino-pretty": "11.1.0",
+    "tsx": "4.23.15",
+    "typescript": "5.4.5"
+  }
+}

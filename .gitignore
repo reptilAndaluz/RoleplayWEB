@@ -1,48 +1,37 @@
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.pytest_cache/
-.coverage
-htmlcov/
+# Dependencias
+node_modules/
+.pnp
+.pnp.js
 
-# Virtual Environment
-venv/
-.venv/
-env/
-ENV/
-
-# Local configuration and secure files
+# Entornos y secretos
+.env
+.env.local
+.env.*.local
 *.pem
 *.key
-cert.pem
-key.pem
 
-# Databases and user uploaded files
-data/usuarios.json
-data/personajes.json
-data/sesiones.json
-data/.secret_key
-html/img/uploads/*
-!html/img/uploads/avatars/
-html/img/uploads/avatars/*
-!html/img/uploads/avatars/.gitkeep
-!html/img/uploads/galleries/
-html/img/uploads/galleries/*
-!html/img/uploads/galleries/.gitkeep
+# Salidas de compilación
+dist/
+build/
+*.tsbuildinfo
 
-# Environment secrets
-.env
-
-# Node.js dependencies
-node_modules/
+# Logs
+logs/
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
 
-# OS files
+# Cobertura y testing
+coverage/
+.nyc_output/
+
+# Base de datos local y docker
+pgdata/
+data/
+
+# IDE y sistema
+.vscode/
+.idea/
 .DS_Store
 Thumbs.db
-

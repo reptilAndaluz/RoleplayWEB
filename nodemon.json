@@ -1,7 +1,0 @@
-{
-  "ignore": [
-    "data/*",
-    "html/img/uploads/*",
-    "node_modules/*"
-  ]
-}
