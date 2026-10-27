@@ -29,5 +29,5 @@ export const csrfMiddleware: MiddlewareHandler = async (c, next) => {
     }
   }
 
-  await next();
+  return await next();
 };

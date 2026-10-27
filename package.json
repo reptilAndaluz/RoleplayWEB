@@ -22,6 +22,7 @@
     "postinstall": "prisma generate --schema=./apps/api/prisma/schema.prisma"
   },
   "dependencies": {
+    "@hono/node-server": "2.1.5",
     "@prisma/client": "5.22.0",
     "argon2": "0.45.1",
     "dotenv": "16.4.5",
