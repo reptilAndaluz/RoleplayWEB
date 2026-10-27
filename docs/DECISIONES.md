@@ -1,45 +1,64 @@
-# Registro de Decisiones de Arquitectura y Desarrollo (ADR)
-
-Este documento registra las decisiones tomadas durante el desarrollo del proyecto `rol.burgoslabs.es`, especialmente ante ambigüedades o alternativas técnicas.
+# Registro de Decisiones de Arquitectura y Seguridad (ADR)
+Plataforma: **BurgosLabs Rol (rol.burgoslabs.es)**
+Stack: **Vercel Serverless (Hono) + Neon PostgreSQL (Prisma) + React SPA**
 
 ---
 
-## DEC-001: Ubicación del monorepo y respaldo del código legacy
-- **Fecha:** 2026-10-27
-- **Contexto:** Se contaba con una implementación previa basada en Express monolítico y HTML estático en la raíz del repositorio.
-- **Decisión:** 
-  1. Se creó una rama de respaldo `legacy` en Git para conservar todo el historial y código anterior.
-  2. Se limpió el directorio raíz y se ubicó el monorepo directamente en la raíz del repositorio (con carpetas `apps/` y `packages/`), en lugar de anidar una subcarpeta `rol/` redundante.
-  3. No se migran datos antiguos; se inicia con base de datos limpia para cumplir estrictamente con el nuevo esquema relacional y de sesiones.
+## 1. Runtime Node.js para la API Serverless con Hono
+- **Contexto**: Vercel ofrece runtimes Edge y Node.js.
+- **Decisión**: Se selecciona **Node.js** para la función de Hono (`api/index.ts`).
+- **Motivo**: `argon2` y el motor nativo de `@prisma/client` requieren soporte de APIs del sistema de Node.js (Crypto, binarios compilados), incompatibles con Edge Workers puros. Hono ofrece velocidad óptima y tipado estricto manteniendo portabilidad serverless.
 
-## DEC-002: Versiones fijas y herramientas de desarrollo para Fase 0
-- **Fecha:** 2026-10-27
-- **Contexto:** El plan exige no usar `latest` y fijar versiones exactas de dependencias en `package.json`, además de modo `strict` en TypeScript, ESLint y Prettier.
-- **Decisión:**
-  - TypeScript: `5.4.5` con configuración base compartida (`tsconfig.base.json`) en modo `strict`.
-  - ESLint: `8.57.0` con `@typescript-eslint/parser` y `@typescript-eslint/eslint-plugin` para compatibilidad y estabilidad sólida.
-  - Prettier: `3.2.5`.
-  - Zod: `4.6.7` (versión asegurada ante vulnerabilidades GHSA-mrhx-c7xc-m3w5).
-  - Fastify: `5.12.7` (versión asegurada ante DoS y bypass de validación).
-  - Vite: `8.3.5`, `@vitejs/plugin-react`: `6.1.2`.
-  - Vitest: `5.0.5` (versión asegurada sin vulnerabilidades en tinypool/esbuild).
-  - `@types/node`: `22.20.5`, `tsx`: `4.23.15`.
-  - Resultado: `npm audit` reporta 0 vulnerabilidades.
+---
 
-## DEC-003: Estrategia Docker Compose para desarrollo vs producción
-- **Fecha:** 2026-10-27
-- **Contexto:** El plan exige estrictamente que el servicio `db` en producción no publique ningún puerto al exterior (`sin ports` en `docker-compose.yml`), pero para el desarrollo local y la ejecución de `prisma migrate dev` desde el host se requiere acceso a PostgreSQL en `localhost:5432`.
-- **Decisión:**
-  - `docker-compose.yml`: Archivo de producción con servicios `db`, `api`, `caddy`, `cloudflared` operando exclusivamente en una red bridge interna `internal`, sin ningún puerto de PostgreSQL expuesto.
-  - `docker-compose.dev.yml`: Archivo para entorno de desarrollo local que expone `127.0.0.1:5432:5432` con volumen aislado `pgdata_dev`.
-  - Se añadieron scripts `npm run db:up`, `npm run db:down` y `npm run db:logs` al `package.json` raíz para facilitar el flujo de desarrollo.
+## 2. Rate Limiting Persistente en Base de Datos (`RateLimit`)
+- **Contexto**: En entornos serverless, las lambdas se instancian y destruyen bajo demanda. El rate limiting en memoria RAM local (como el plugin tradicional en memoria de Fastify/Express) es inútil porque cada invocación puede caer en un contenedor distinto.
+- **Decisión**: Implementar rate limiting transaccional mediante la tabla `RateLimit` en PostgreSQL.
+- **Implementación**:
+  - Clave: `login:<ip>` o `register:<ip>`.
+  - Ventana deslizante o fija de 1 minuto con máximo 5 intentos.
+  - Al superar los 5 intentos en la ventana, se responde inmediatamente `429 Too Many Requests`.
+- **Detección de IP**: Se extrae prioritariamente de `x-real-ip` o del primer valor de `x-forwarded-for` inyectados por el proxy de Vercel. No se permite falseamiento mediante cabeceras no confiables del cliente.
 
-## DEC-004: Autenticación, cookies y prevención de timing attacks
-- **Fecha:** 2026-10-27
-- **Contexto:** Se requiere autenticación basada en servidor con cookies seguras y hash con argon2id, protegiendo contra ataques de enumeración y CSRF.
-- **Decisión:**
-  - Se utiliza `argon2` configurado en variante `argon2id` (64 MB de memoria, tiempo de iteración 3 y 4 hilos en paralelo).
-  - En login, si el usuario no existe en la base de datos, se ejecuta una verificación con hash dummy contra la contraseña suministrada para unificar el tiempo de respuesta y neutralizar ataques de temporización / enumeración.
-  - Los tokens de sesión se generan mediante 32 bytes de entropía criptográfica (`crypto.randomBytes(32)`), y en la base de datos se almacena única y exclusivamente su resumen criptográfico SHA-256 (`tokenHash`).
-  - La cookie `rol_session` se envía con `HttpOnly; SameSite=Lax; Path=/; Max-Age=604800` (7 días), y el flag `Secure` se activa dinámicamente cuando `NODE_ENV === 'production'`, facilitando el desarrollo local sobre HTTP.
-  - Se implementó un hook global CSRF en Fastify que rechaza peticiones mutantes (`POST`, `PUT`, `PATCH`, `DELETE`) cuya cabecera `Origin` no coincida con `ALLOWED_ORIGIN`.
+---
+
+## 3. Manejo de Conexiones con Neon (`DATABASE_URL` y `DIRECT_URL`)
+- **Contexto**: Neon proporciona dos tipos de cadenas de conexión: pooling con PgBouncer y conexión directa a la base de datos PostgreSQL.
+- **Decisión**:
+  - `DATABASE_URL`: Utiliza el host `-pooler` de Neon. Es la utilizada en runtime por la API para no agotar el límite de conexiones concurrentes ante múltiples lambdas.
+  - `DIRECT_URL`: Utiliza la conexión directa sin pooler. Es requerida exclusivamente para comandos DDL como `prisma migrate dev` y `prisma migrate deploy`.
+  - **Singleton de Prisma**: Se asegura una única instancia de `PrismaClient` a nivel de módulo (`globalThis.prisma`) para compartir el pool de conexiones entre invocaciones calientes de la función.
+
+---
+
+## 4. Sesiones en Servidor y Almacenamiento Criptográfico de Tokens
+- **Contexto**: Prevenir ataques de robo de credenciales (XSS, robo de almacenamiento local, replay).
+- **Decisión**:
+  - Prohibido terminantemente almacenar tokens JWT o de sesión en `localStorage` o `sessionStorage`.
+  - Se genera un token aleatorio criptográfico de 32 bytes (`crypto.randomBytes(32).toString('hex')`).
+  - En la tabla `Session` de PostgreSQL **solo se almacena el SHA-256** del token (`tokenHash`).
+  - La cookie de sesión viaja con atributos obligatorios:
+    `HttpOnly; Secure; SameSite=Lax; Path=/` con caducidad de 7 días.
+  - En cada login exitoso se rota la sesión anterior.
+
+---
+
+## 5. Prevención de Ataques CSRF
+- **Contexto**: Las cookies enviadas automáticamente por el navegador pueden ser aprovechadas en peticiones entre sitios maliciosos.
+- **Decisión**: En todos los métodos mutantes (`POST`, `PUT`, `PATCH`, `DELETE`), el middleware de seguridad valida que la cabecera `Origin` coincida exactamente con `ALLOWED_ORIGIN` (`https://rol.burgoslabs.es`). Si no coincide o está ausente, se aborta la petición con `403 Forbidden`.
+
+---
+
+## 6. Anti-Enumeración de Recursos y Usuarios
+- **Contexto**: Evitar que atacantes descubran qué correos están registrados o qué IDs de fichas/campañas existen.
+- **Decisión**:
+  - En login: si el usuario no existe o la contraseña no coincide, se devuelve un mensaje genérico idéntico: `Credenciales inválidas`.
+  - Mitigación de timing attack: si el usuario no existe, se ejecuta un hash ficticio de contraseña para simular el consumo de CPU de argon2id y mantener tiempos de respuesta equivalentes.
+  - En fichas y campañas: las consultas incluyen el filtro de pertenencia (`where: { id, ownerId }`). Tanto si el recurso no existe como si pertenece a otro usuario no autorizado, la API responde un **404 Not Found** uniforme.
+
+---
+
+## 7. Tarea de Mantenimiento y Purga Automatizada (`/api/cron/cleanup`)
+- **Contexto**: Las filas de sesiones caducadas y de rate limits antiguos acumulan espacio innecesario.
+- **Decisión**: Se expone el endpoint `GET /api/cron/cleanup` invocado periódicamente por Vercel Cron.
+- **Seguridad**: Requiere obligatoriamente la cabecera `Authorization: Bearer <CRON_SECRET>`. Peticiones no autenticadas o con token erróneo son rechazadas con `401 Unauthorized`.
