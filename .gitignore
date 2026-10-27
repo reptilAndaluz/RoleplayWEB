@@ -26,9 +26,11 @@ yarn-error.log*
 coverage/
 .nyc_output/
 
-# Base de datos local y docker
+# Base de datos local, docker y backups
 pgdata/
 data/
+backups/
+*.sql.gz
 
 # IDE y sistema
 .vscode/
