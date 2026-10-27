@@ -4,11 +4,17 @@ node_modules/
 .pnp.js
 
 # Entornos y secretos
-.env
-.env.local
-.env.*.local
+.env*
+!.env.example
+.vercel/
 *.pem
 *.key
+
+# Volcados y backups
+*.sql
+!**/prisma/migrations/**/*.sql
+*.dump
+*.sql.gz
 
 # Salidas de compilación
 dist/
@@ -30,7 +36,6 @@ coverage/
 pgdata/
 data/
 backups/
-*.sql.gz
 
 # IDE y sistema
 .vscode/
