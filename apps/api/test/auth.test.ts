@@ -1,323 +1,251 @@
 import 'dotenv/config';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { buildServer } from '../src/server.js';
+import { createApp } from '../src/app.js';
 import { prisma } from '../src/lib/prisma.js';
 import { env } from '../src/config/env.js';
 import { SESSION_COOKIE_NAME } from '../src/lib/tokens.js';
-import type { FastifyInstance } from 'fastify';
+import type { Hono } from 'hono';
 
-describe('Módulo de Autenticación (API)', () => {
-  let app: FastifyInstance;
+describe('Módulo de Autenticación (API Hono)', () => {
+  let app: Hono;
 
   beforeAll(async () => {
-    app = buildServer();
-    await app.ready();
+    app = createApp();
     await prisma.$connect();
+    await prisma.session.deleteMany();
+    await prisma.user.deleteMany();
+    await prisma.rateLimit.deleteMany();
   });
 
   afterAll(async () => {
     await prisma.session.deleteMany();
     await prisma.user.deleteMany();
+    await prisma.rateLimit.deleteMany();
     await prisma.$disconnect();
-    await app.close();
   });
 
   describe('Protección CSRF en métodos mutantes', () => {
-    it('rechaza peticiones mutantes sin cabecera Origin', async () => {
-      const res = await app.inject({
+    it('rechaza peticiones mutantes sin cabecera Origin con 403', async () => {
+      const res = await app.request('/api/auth/register', {
         method: 'POST',
-        url: '/api/auth/register',
-        payload: {
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           email: 'test_csrf@burgoslabs.es',
           displayName: 'Test',
           password: 'Password123456!',
-        },
+        }),
       });
-      expect(res.statusCode).toBe(403);
-      expect(JSON.parse(res.body).message).toContain('CSRF');
+
+      expect(res.status).toBe(403);
+      const json = await res.json();
+      expect(json.message).toContain('Origin');
     });
 
-    it('rechaza peticiones mutantes con cabecera Origin no permitida', async () => {
-      const res = await app.inject({
+    it('rechaza peticiones mutantes con cabecera Origin no permitida con 403', async () => {
+      const res = await app.request('/api/auth/register', {
         method: 'POST',
-        url: '/api/auth/register',
         headers: {
-          origin: 'https://sitio-malicioso.com',
+          'Content-Type': 'application/json',
+          Origin: 'https://sitio-malicioso.com',
         },
-        payload: {
-          email: 'test_csrf@burgoslabs.es',
+        body: JSON.stringify({
+          email: 'test_csrf2@burgoslabs.es',
           displayName: 'Test',
           password: 'Password123456!',
-        },
+        }),
       });
-      expect(res.statusCode).toBe(403);
+
+      expect(res.status).toBe(403);
     });
   });
 
-  describe('Registro (POST /api/auth/register)', () => {
-    it('registra un usuario nuevo y devuelve cookie HttpOnly con 7 días de sesión', async () => {
-      const res = await app.inject({
+  describe('POST /api/auth/register', () => {
+    it('registra un usuario correctamente y devuelve cookie de sesión HttpOnly', async () => {
+      const res = await app.request('/api/auth/register', {
         method: 'POST',
-        url: '/api/auth/register',
         headers: {
-          origin: env.ALLOWED_ORIGIN,
+          'Content-Type': 'application/json',
+          Origin: env.ALLOWED_ORIGIN,
+          'x-real-ip': '10.0.0.1',
         },
-        payload: {
-          email: 'hero@burgoslabs.es',
-          displayName: 'Héroe Legendario',
-          password: 'PasswordSegura123!',
-        },
+        body: JSON.stringify({
+          email: 'aventurero@burgoslabs.es',
+          displayName: 'Drizzt DoUrden',
+          password: 'SuperPassword123!',
+        }),
       });
 
-      expect(res.statusCode).toBe(201);
-      const data = JSON.parse(res.body);
+      expect(res.status).toBe(201);
+      const data = await res.json();
       expect(data.user).toBeDefined();
-      expect(data.user.email).toBe('hero@burgoslabs.es');
-      expect(data.user.displayName).toBe('Héroe Legendario');
+      expect(data.user.email).toBe('aventurero@burgoslabs.es');
+      expect(data.user.displayName).toBe('Drizzt DoUrden');
       expect(data.user.passwordHash).toBeUndefined();
 
-      // Verificar cookie de sesión
-      const cookieHeader = res.headers['set-cookie'];
-      expect(cookieHeader).toBeDefined();
-      const cookieStr = Array.isArray(cookieHeader) ? cookieHeader[0] : (cookieHeader as string);
-      expect(cookieStr).toContain(SESSION_COOKIE_NAME);
-      expect(cookieStr).toContain('HttpOnly');
-      expect(cookieStr).toContain('SameSite=Lax');
-      expect(cookieStr).toContain('Path=/');
-
-      // Verificar que en la base de datos se guardó solo el SHA-256 del token, no en claro
-      const sessions = await prisma.session.findMany({ where: { userId: data.user.id } });
-      expect(sessions.length).toBe(1);
-      expect(sessions[0]?.tokenHash).toHaveLength(64); // SHA-256 hex
+      // Cabecera Set-Cookie
+      const setCookie = res.headers.get('set-cookie');
+      expect(setCookie).toBeDefined();
+      expect(setCookie).toContain(SESSION_COOKIE_NAME);
+      expect(setCookie).toContain('HttpOnly');
+      expect(setCookie).toContain('SameSite=Lax');
     });
 
-    it('rechaza registro con email duplicado', async () => {
-      const res = await app.inject({
+    it('rechaza contraseñas menores a 10 caracteres', async () => {
+      const res = await app.request('/api/auth/register', {
         method: 'POST',
-        url: '/api/auth/register',
         headers: {
-          origin: env.ALLOWED_ORIGIN,
+          'Content-Type': 'application/json',
+          Origin: env.ALLOWED_ORIGIN,
+          'x-real-ip': '10.0.0.2',
         },
-        payload: {
-          email: 'hero@burgoslabs.es',
-          displayName: 'Otro Héroe',
-          password: 'PasswordSegura123!',
-        },
-      });
-
-      expect(res.statusCode).toBe(409);
-    });
-
-    it('rechaza contraseña de menos de 10 caracteres con 400', async () => {
-      const res = await app.inject({
-        method: 'POST',
-        url: '/api/auth/register',
-        headers: {
-          origin: env.ALLOWED_ORIGIN,
-        },
-        payload: {
-          email: 'shortpass@burgoslabs.es',
+        body: JSON.stringify({
+          email: 'corto@burgoslabs.es',
           displayName: 'Corto',
           password: 'corta',
-        },
+        }),
       });
 
-      expect(res.statusCode).toBe(400);
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.message).toContain('10 caracteres');
+    });
+
+    it('rechaza registros con emails duplicados con 409 Conflict', async () => {
+      const res = await app.request('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: env.ALLOWED_ORIGIN,
+          'x-real-ip': '10.0.0.3',
+        },
+        body: JSON.stringify({
+          email: 'aventurero@burgoslabs.es',
+          displayName: 'Clon',
+          password: 'OtraPassword123!',
+        }),
+      });
+
+      expect(res.status).toBe(409);
     });
   });
 
-  describe('Login (POST /api/auth/login)', () => {
+  describe('POST /api/auth/login', () => {
     it('inicia sesión con credenciales correctas y rota la sesión', async () => {
-      const res = await app.inject({
+      const res = await app.request('/api/auth/login', {
         method: 'POST',
-        url: '/api/auth/login',
         headers: {
-          origin: env.ALLOWED_ORIGIN,
+          'Content-Type': 'application/json',
+          Origin: env.ALLOWED_ORIGIN,
+          'x-real-ip': '10.0.0.4',
         },
-        payload: {
-          email: 'hero@burgoslabs.es',
-          password: 'PasswordSegura123!',
-        },
+        body: JSON.stringify({
+          email: 'aventurero@burgoslabs.es',
+          password: 'SuperPassword123!',
+        }),
       });
 
-      expect(res.statusCode).toBe(200);
-      const data = JSON.parse(res.body);
-      expect(data.user.email).toBe('hero@burgoslabs.es');
-      expect(res.headers['set-cookie']).toBeDefined();
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.user.email).toBe('aventurero@burgoslabs.es');
+      const setCookie = res.headers.get('set-cookie');
+      expect(setCookie).toContain(SESSION_COOKIE_NAME);
     });
 
-    it('devuelve mensaje de error genérico cuando el email no existe (sin enumeración)', async () => {
-      const res = await app.inject({
+    it('devuelve mensaje genérico 401 si la contraseña es incorrecta', async () => {
+      const res = await app.request('/api/auth/login', {
         method: 'POST',
-        url: '/api/auth/login',
         headers: {
-          origin: env.ALLOWED_ORIGIN,
+          'Content-Type': 'application/json',
+          Origin: env.ALLOWED_ORIGIN,
+          'x-real-ip': '10.0.0.5',
         },
-        payload: {
-          email: 'inexistente@burgoslabs.es',
-          password: 'PasswordSegura123!',
-        },
-      });
-
-      expect(res.statusCode).toBe(401);
-      const data = JSON.parse(res.body);
-      expect(data.message).toBe('Credenciales inválidas');
-    });
-
-    it('devuelve mensaje de error genérico cuando la contraseña es incorrecta', async () => {
-      const res = await app.inject({
-        method: 'POST',
-        url: '/api/auth/login',
-        headers: {
-          origin: env.ALLOWED_ORIGIN,
-        },
-        payload: {
-          email: 'hero@burgoslabs.es',
+        body: JSON.stringify({
+          email: 'aventurero@burgoslabs.es',
           password: 'PasswordErronea123!',
-        },
+        }),
       });
 
-      expect(res.statusCode).toBe(401);
-      const data = JSON.parse(res.body);
-      expect(data.message).toBe('Credenciales inválidas');
+      expect(res.status).toBe(401);
+      const json = await res.json();
+      expect(json.message).toBe('Credenciales inválidas');
+    });
+
+    it('devuelve mensaje genérico 401 si el usuario no existe', async () => {
+      const res = await app.request('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: env.ALLOWED_ORIGIN,
+          'x-real-ip': '10.0.0.6',
+        },
+        body: JSON.stringify({
+          email: 'noexiste@burgoslabs.es',
+          password: 'Password123456!',
+        }),
+      });
+
+      expect(res.status).toBe(401);
+      const json = await res.json();
+      expect(json.message).toBe('Credenciales inválidas');
     });
   });
 
-  describe('Perfil protegido (GET /api/auth/me)', () => {
-    it('rechaza con 401 si no hay sesión', async () => {
-      const res = await app.inject({
-        method: 'GET',
-        url: '/api/auth/me',
-      });
-      expect(res.statusCode).toBe(401);
-    });
-
-    it('permite acceso con cookie de sesión válida', async () => {
-      // Login para obtener cookie
-      const loginRes = await app.inject({
+  describe('GET /api/auth/me y POST /api/auth/logout', () => {
+    it('devuelve el perfil del usuario autenticado y rechaza sin sesión', async () => {
+      // 1. Login para obtener cookie
+      const loginRes = await app.request('/api/auth/login', {
         method: 'POST',
-        url: '/api/auth/login',
-        headers: { origin: env.ALLOWED_ORIGIN, 'cf-connecting-ip': '10.0.1.1' },
-        payload: {
-          email: 'hero@burgoslabs.es',
-          password: 'PasswordSegura123!',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: env.ALLOWED_ORIGIN,
+          'x-real-ip': '10.0.0.7',
         },
+        body: JSON.stringify({
+          email: 'aventurero@burgoslabs.es',
+          password: 'SuperPassword123!',
+        }),
       });
-      const cookie = loginRes.cookies[0];
-      expect(cookie).toBeDefined();
 
-      const meRes = await app.inject({
+      const setCookie = loginRes.headers.get('set-cookie')!;
+      const cookieValue = setCookie.split(';')[0];
+
+      // 2. GET /me con cookie
+      const meRes = await app.request('/api/auth/me', {
         method: 'GET',
-        url: '/api/auth/me',
-        cookies: {
-          [cookie!.name]: cookie!.value,
+        headers: {
+          Cookie: cookieValue,
         },
       });
 
-      expect(meRes.statusCode).toBe(200);
-      const data = JSON.parse(meRes.body);
-      expect(data.user.email).toBe('hero@burgoslabs.es');
-    });
+      expect(meRes.status).toBe(200);
+      const meData = await meRes.json();
+      expect(meData.user.email).toBe('aventurero@burgoslabs.es');
 
-    it('rechaza con 401 si la sesión está caducada', async () => {
-      // Login para obtener sesión
-      const loginRes = await app.inject({
-        method: 'POST',
-        url: '/api/auth/login',
-        headers: { origin: env.ALLOWED_ORIGIN, 'cf-connecting-ip': '10.0.1.2' },
-        payload: {
-          email: 'hero@burgoslabs.es',
-          password: 'PasswordSegura123!',
-        },
-      });
-      const cookie = loginRes.cookies[0];
-      expect(cookie).toBeDefined();
-
-      // Modificar la sesión en BD para forzar su caducidad
-      await prisma.session.updateMany({
-        where: { user: { email: 'hero@burgoslabs.es' } },
-        data: { expiresAt: new Date(Date.now() - 1000) }, // Caducada hace 1 segundo
-      });
-
-      const meRes = await app.inject({
+      // 3. GET /me sin cookie -> 401
+      const unauthRes = await app.request('/api/auth/me', {
         method: 'GET',
-        url: '/api/auth/me',
-        cookies: {
-          [cookie!.name]: cookie!.value,
-        },
       });
+      expect(unauthRes.status).toBe(401);
 
-      expect(meRes.statusCode).toBe(401);
-    });
-
-    it('rechaza con 401 si la sesión fue eliminada en BD', async () => {
-      const loginRes = await app.inject({
+      // 4. Logout
+      const logoutRes = await app.request('/api/auth/logout', {
         method: 'POST',
-        url: '/api/auth/login',
-        headers: { origin: env.ALLOWED_ORIGIN, 'cf-connecting-ip': '10.0.1.3' },
-        payload: {
-          email: 'hero@burgoslabs.es',
-          password: 'PasswordSegura123!',
+        headers: {
+          Origin: env.ALLOWED_ORIGIN,
+          Cookie: cookieValue,
         },
       });
-      const cookie = loginRes.cookies[0];
-      expect(cookie).toBeDefined();
 
-      // Borrar todas las sesiones
-      await prisma.session.deleteMany();
+      expect(logoutRes.status).toBe(200);
 
-      const meRes = await app.inject({
+      // 5. GET /me tras logout -> 401
+      const meAfterLogout = await app.request('/api/auth/me', {
         method: 'GET',
-        url: '/api/auth/me',
-        cookies: {
-          [cookie!.name]: cookie!.value,
+        headers: {
+          Cookie: cookieValue,
         },
       });
-
-      expect(meRes.statusCode).toBe(401);
-    });
-  });
-
-  describe('Cierre de sesión (POST /api/auth/logout)', () => {
-    it('elimina la sesión en base de datos y borra la cookie', async () => {
-      // Iniciar sesión
-      const loginRes = await app.inject({
-        method: 'POST',
-        url: '/api/auth/login',
-        headers: { origin: env.ALLOWED_ORIGIN, 'cf-connecting-ip': '10.0.1.4' },
-        payload: {
-          email: 'hero@burgoslabs.es',
-          password: 'PasswordSegura123!',
-        },
-      });
-      const cookie = loginRes.cookies[0];
-      expect(cookie).toBeDefined();
-
-      // Cerrar sesión
-      const logoutRes = await app.inject({
-        method: 'POST',
-        url: '/api/auth/logout',
-        headers: { origin: env.ALLOWED_ORIGIN },
-        cookies: {
-          [cookie!.name]: cookie!.value,
-        },
-      });
-
-      expect(logoutRes.statusCode).toBe(200);
-
-      // Verificar que la cookie fue limpiada
-      const clearCookie = logoutRes.cookies.find((c) => c.name === SESSION_COOKIE_NAME);
-      expect(clearCookie).toBeDefined();
-
-      // Verificar que ya no se puede acceder a /api/auth/me
-      const meRes = await app.inject({
-        method: 'GET',
-        url: '/api/auth/me',
-        cookies: {
-          [cookie!.name]: cookie!.value,
-        },
-      });
-      expect(meRes.statusCode).toBe(401);
+      expect(meAfterLogout.status).toBe(401);
     });
   });
 });

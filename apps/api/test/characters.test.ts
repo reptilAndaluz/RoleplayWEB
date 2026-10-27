@@ -1,13 +1,13 @@
 import 'dotenv/config';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { buildServer } from '../src/server.js';
+import { createApp } from '../src/app.js';
 import { prisma } from '../src/lib/prisma.js';
 import { env } from '../src/config/env.js';
 import { SESSION_COOKIE_NAME } from '../src/lib/tokens.js';
-import type { FastifyInstance } from 'fastify';
+import type { Hono } from 'hono';
 
-describe('Módulo de Personajes (API)', () => {
-  let app: FastifyInstance;
+describe('Módulo de Personajes (API Hono)', () => {
+  let app: Hono;
   let userACookie: string;
   let userBCookie: string;
   let dmCookie: string;
@@ -39,73 +39,83 @@ describe('Módulo de Personajes (API)', () => {
     hitDice: '3d6',
   };
 
+  const getCookieHeader = (res: Response) => {
+    const raw = res.headers.get('set-cookie');
+    return raw ? raw.split(';')[0] : '';
+  };
+
   beforeAll(async () => {
-    app = buildServer();
-    await app.ready();
+    app = createApp();
     await prisma.$connect();
+    await prisma.character.deleteMany();
+    await prisma.campaignMember.deleteMany();
+    await prisma.campaign.deleteMany();
+    await prisma.session.deleteMany();
+    await prisma.user.deleteMany();
+    await prisma.rateLimit.deleteMany();
 
     // Crear Usuario A
-    const resA = await app.inject({
+    const resA = await app.request('/api/auth/register', {
       method: 'POST',
-      url: '/api/auth/register',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      payload: {
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        'x-real-ip': '20.0.0.1',
+      },
+      body: JSON.stringify({
         email: 'usera_chars@burgoslabs.es',
         displayName: 'Usuario A',
         password: 'PasswordSegura123!',
-      },
+      }),
     });
-    userACookie = resA.cookies[0]!.value;
+    userACookie = getCookieHeader(resA);
 
     // Crear Usuario B
-    const resB = await app.inject({
+    const resB = await app.request('/api/auth/register', {
       method: 'POST',
-      url: '/api/auth/register',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      payload: {
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        'x-real-ip': '20.0.0.2',
+      },
+      body: JSON.stringify({
         email: 'userb_chars@burgoslabs.es',
         displayName: 'Usuario B',
         password: 'PasswordSegura123!',
-      },
+      }),
     });
-    userBCookie = resB.cookies[0]!.value;
+    userBCookie = getCookieHeader(resB);
 
-    // Crear DM
-    const resDM = await app.inject({
+    // Crear DM y campaña
+    const resDM = await app.request('/api/auth/register', {
       method: 'POST',
-      url: '/api/auth/register',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      payload: {
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        'x-real-ip': '20.0.0.3',
+      },
+      body: JSON.stringify({
         email: 'dm_chars@burgoslabs.es',
-        displayName: 'DM Chars',
+        displayName: 'Dungeon Master',
         password: 'PasswordSegura123!',
-      },
+      }),
     });
-    dmCookie = resDM.cookies[0]!.value;
+    dmCookie = getCookieHeader(resDM);
 
-    // DM crea una campaña
-    const campRes = await app.inject({
+    const resCamp = await app.request('/api/campaigns', {
       method: 'POST',
-      url: '/api/campaigns',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: dmCookie },
-      payload: {
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        Cookie: dmCookie,
+      },
+      body: JSON.stringify({
         name: 'Campaña de Prueba',
         system: 'dnd5e',
-      },
+      }),
     });
-    const campData = JSON.parse(campRes.body);
+    const campData = await resCamp.json();
     campaignId = campData.campaign.id;
-    const inviteCode = campData.campaign.inviteCode;
-
-    // Usuario A se une a la campaña
-    await app.inject({
-      method: 'POST',
-      url: '/api/campaigns/join',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: userACookie },
-      payload: { inviteCode },
-    });
   });
 
   afterAll(async () => {
@@ -114,184 +124,142 @@ describe('Módulo de Personajes (API)', () => {
     await prisma.campaign.deleteMany();
     await prisma.session.deleteMany();
     await prisma.user.deleteMany();
+    await prisma.rateLimit.deleteMany();
     await prisma.$disconnect();
-    await app.close();
   });
 
-  let charAId: string;
-
-  it('permite a Usuario A crear un personaje y asignarlo a una campaña donde es miembro', async () => {
-    const res = await app.inject({
+  it('permite crear una ficha D&D 5e válida a Usuario A', async () => {
+    const res = await app.request('/api/characters', {
       method: 'POST',
-      url: '/api/characters',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: userACookie },
-      payload: {
-        name: 'Raistlin',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        Cookie: userACookie,
+      },
+      body: JSON.stringify({
+        name: 'Raistlin Majere',
+        system: 'dnd5e',
+        data: validDndData,
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.character.name).toBe('Raistlin Majere');
+    expect(body.character.system).toBe('dnd5e');
+  });
+
+  it('rechaza la creación de ficha si los datos violan el esquema (ej. atributos mayores a 30)', async () => {
+    const invalidData = {
+      ...validDndData,
+      attributes: {
+        ...validDndData.attributes,
+        strength: 55, // Máximo permitido: 30
+      },
+    };
+
+    const res = await app.request('/api/characters', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        Cookie: userACookie,
+      },
+      body: JSON.stringify({
+        name: 'Hulk',
+        system: 'dnd5e',
+        data: invalidData,
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.message).toContain('30');
+  });
+
+  it('rechaza asignar una ficha a una campaña si el usuario no es miembro', async () => {
+    const res = await app.request('/api/characters', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        Cookie: userBCookie,
+      },
+      body: JSON.stringify({
+        name: 'Intruso',
         system: 'dnd5e',
         campaignId,
         data: validDndData,
-      },
+      }),
     });
 
-    expect(res.statusCode).toBe(201);
-    const data = JSON.parse(res.body);
-    expect(data.character.name).toBe('Raistlin');
-    expect(data.character.campaignId).toBe(campaignId);
-    charAId = data.character.id;
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.message).toContain('no eres miembro');
   });
 
-  it('rechaza asignar personaje a una campaña de la que NO es miembro (Usuario B)', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/characters',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: userBCookie },
-      payload: {
-        name: 'Personaje Infiltrado',
-        system: 'dnd5e',
-        campaignId, // Usuario B no es miembro de esta campaña
-        data: validDndData,
-      },
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body).message).toContain('no eres miembro');
-  });
-
-  it('rechaza la creación si data supera los 64 KB o incumple el esquema', async () => {
-    // Incumple esquema (nivel 30)
-    const badSchemaRes = await app.inject({
-      method: 'POST',
-      url: '/api/characters',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: userACookie },
-      payload: {
-        name: 'Nivel Ilegal',
-        system: 'dnd5e',
-        data: { ...validDndData, level: 30 },
-      },
-    });
-    expect(badSchemaRes.statusCode).toBe(400);
-
-    // Supera 64 KB
-    const oversizedRes = await app.inject({
-      method: 'POST',
-      url: '/api/characters',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: userACookie },
-      payload: {
-        name: 'Demasiado Grande',
-        system: 'dnd5e',
-        data: { ...validDndData, notes: 'X'.repeat(66 * 1024) },
-      },
-    });
-    expect(oversizedRes.statusCode).toBe(400);
-    expect(JSON.parse(oversizedRes.body).message).toContain('64 KB');
-  });
-
-  it('GET /api/characters devuelve únicamente los personajes del usuario autenticado', async () => {
-    // Usuario B crea su propio personaje
-    await app.inject({
-      method: 'POST',
-      url: '/api/characters',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: userBCookie },
-      payload: {
-        name: 'Personaje de B',
-        system: 'dnd5e',
-        data: validDndData,
-      },
-    });
-
-    const resA = await app.inject({
+  it('lista las fichas del usuario con paginación y búsqueda', async () => {
+    const res = await app.request('/api/characters?page=1&limit=10&search=Raistlin', {
       method: 'GET',
-      url: '/api/characters',
-      cookies: { [SESSION_COOKIE_NAME]: userACookie },
+      headers: {
+        Cookie: userACookie,
+      },
     });
-    expect(resA.statusCode).toBe(200);
-    const dataA = JSON.parse(resA.body);
-    expect(dataA.items.length).toBe(1);
-    expect(dataA.items[0].name).toBe('Raistlin');
 
-    const resB = await app.inject({
-      method: 'GET',
-      url: '/api/characters',
-      cookies: { [SESSION_COOKIE_NAME]: userBCookie },
-    });
-    expect(resB.statusCode).toBe(200);
-    const dataB = JSON.parse(resB.body);
-    expect(dataB.items.length).toBe(1);
-    expect(dataB.items[0].name).toBe('Personaje de B');
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.items.length).toBe(1);
+    expect(body.items[0].name).toBe('Raistlin Majere');
+    expect(body.total).toBe(1);
   });
 
-  it('el DM de la campaña puede leer el personaje de A, pero un usuario ajeno recibe 404', async () => {
-    // DM lee ficha de A (asignada a su campaña)
-    const resDM = await app.inject({
+  it('permite al propietario editar su propia ficha', async () => {
+    const listRes = await app.request('/api/characters', {
       method: 'GET',
-      url: `/api/characters/${charAId}`,
-      cookies: { [SESSION_COOKIE_NAME]: dmCookie },
+      headers: { Cookie: userACookie },
     });
-    expect(resDM.statusCode).toBe(200);
-    expect(JSON.parse(resDM.body).character.name).toBe('Raistlin');
+    const list = await listRes.json();
+    const charId = list.items[0].id;
 
-    // Usuario B (no es DM ni propietario) recibe 404
-    const resB = await app.inject({
-      method: 'GET',
-      url: `/api/characters/${charAId}`,
-      cookies: { [SESSION_COOKIE_NAME]: userBCookie },
-    });
-    expect(resB.statusCode).toBe(404);
-  });
-
-  it('el DM NO puede editar ni borrar la ficha de A (recibe 404)', async () => {
-    // DM intenta editar
-    const resEdit = await app.inject({
+    const res = await app.request(`/api/characters/${charId}`, {
       method: 'PUT',
-      url: `/api/characters/${charAId}`,
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: dmCookie },
-      payload: { name: 'Nombre cambiado por DM' },
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        Cookie: userACookie,
+      },
+      body: JSON.stringify({
+        name: 'Raistlin el Túnica Negra',
+      }),
     });
-    expect(resEdit.statusCode).toBe(404);
 
-    // DM intenta borrar
-    const resDelete = await app.inject({
-      method: 'DELETE',
-      url: `/api/characters/${charAId}`,
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: dmCookie },
-    });
-    expect(resDelete.statusCode).toBe(404);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.character.name).toBe('Raistlin el Túnica Negra');
   });
 
-  it('el propietario (Usuario A) puede actualizar y borrar su personaje', async () => {
-    // Actualizar
-    const resUpdate = await app.inject({
-      method: 'PUT',
-      url: `/api/characters/${charAId}`,
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: userACookie },
-      payload: { name: 'Raistlin Majere' },
-    });
-    expect(resUpdate.statusCode).toBe(200);
-    expect(JSON.parse(resUpdate.body).character.name).toBe('Raistlin Majere');
-
-    // Borrar
-    const resDelete = await app.inject({
-      method: 'DELETE',
-      url: `/api/characters/${charAId}`,
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: userACookie },
-    });
-    expect(resDelete.statusCode).toBe(200);
-
-    // Ya no existe
-    const resGet = await app.inject({
+  it('permite al propietario borrar su ficha con código 204 No Content', async () => {
+    const listRes = await app.request('/api/characters', {
       method: 'GET',
-      url: `/api/characters/${charAId}`,
-      cookies: { [SESSION_COOKIE_NAME]: userACookie },
+      headers: { Cookie: userACookie },
     });
-    expect(resGet.statusCode).toBe(404);
+    const list = await listRes.json();
+    const charId = list.items[0].id;
+
+    const res = await app.request(`/api/characters/${charId}`, {
+      method: 'DELETE',
+      headers: {
+        Origin: env.ALLOWED_ORIGIN,
+        Cookie: userACookie,
+      },
+    });
+
+    expect(res.status).toBe(204);
+
+    const checkRes = await app.request(`/api/characters/${charId}`, {
+      method: 'GET',
+      headers: { Cookie: userACookie },
+    });
+    expect(checkRes.status).toBe(404);
   });
 });

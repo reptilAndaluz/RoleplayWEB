@@ -1,13 +1,13 @@
 import 'dotenv/config';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { buildServer } from '../src/server.js';
+import { createApp } from '../src/app.js';
 import { prisma } from '../src/lib/prisma.js';
 import { env } from '../src/config/env.js';
 import { SESSION_COOKIE_NAME } from '../src/lib/tokens.js';
-import type { FastifyInstance } from 'fastify';
+import type { Hono } from 'hono';
 
-describe('Tests de Seguridad Obligatorios (Sección 6 del Plan)', () => {
-  let app: FastifyInstance;
+describe('Tests de Seguridad Obligatorios (Sección 6 del Plan - 9 Requisitos)', () => {
+  let app: Hono;
   let userACookie: string;
   let userBCookie: string;
   let dmCookie: string;
@@ -39,121 +39,161 @@ describe('Tests de Seguridad Obligatorios (Sección 6 del Plan)', () => {
     },
   };
 
+  const getCookieHeader = (res: Response) => {
+    const raw = res.headers.get('set-cookie');
+    return raw ? raw.split(';')[0] : '';
+  };
+
   beforeAll(async () => {
-    app = buildServer();
-    await app.ready();
+    app = createApp();
     await prisma.$connect();
+    await prisma.character.deleteMany();
+    await prisma.campaignMember.deleteMany();
+    await prisma.campaign.deleteMany();
+    await prisma.session.deleteMany();
+    await prisma.user.deleteMany();
+    await prisma.rateLimit.deleteMany();
 
     // 1. Usuario A
-    const resA = await app.inject({
+    const resA = await app.request('/api/auth/register', {
       method: 'POST',
-      url: '/api/auth/register',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      payload: {
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        'x-real-ip': '40.0.0.1',
+      },
+      body: JSON.stringify({
         email: 'sec_usera@burgoslabs.es',
         displayName: 'Usuario A',
         password: 'PasswordSegura123!',
-      },
+      }),
     });
-    userACookie = resA.cookies[0]!.value;
+    userACookie = getCookieHeader(resA);
 
     // 2. Usuario B
-    const resB = await app.inject({
+    const resB = await app.request('/api/auth/register', {
       method: 'POST',
-      url: '/api/auth/register',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      payload: {
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        'x-real-ip': '40.0.0.2',
+      },
+      body: JSON.stringify({
         email: 'sec_userb@burgoslabs.es',
         displayName: 'Usuario B',
         password: 'PasswordSegura123!',
-      },
+      }),
     });
-    userBCookie = resB.cookies[0]!.value;
+    userBCookie = getCookieHeader(resB);
 
-    // 3. DM Campaña 1
-    const resDM1 = await app.inject({
+    // 3. DM 1 (crea campaña 1)
+    const resDm = await app.request('/api/auth/register', {
       method: 'POST',
-      url: '/api/auth/register',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      payload: {
-        email: 'sec_dm1@burgoslabs.es',
-        displayName: 'DM 1',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        'x-real-ip': '40.0.0.3',
+      },
+      body: JSON.stringify({
+        email: 'sec_dm@burgoslabs.es',
+        displayName: 'Dungeon Master 1',
         password: 'PasswordSegura123!',
-      },
+      }),
     });
-    dmCookie = resDM1.cookies[0]!.value;
+    dmCookie = getCookieHeader(resDm);
 
-    // 4. DM Campaña 2
-    const resDM2 = await app.inject({
+    const camp1Res = await app.request('/api/campaigns', {
       method: 'POST',
-      url: '/api/auth/register',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      payload: {
-        email: 'sec_dm2@burgoslabs.es',
-        displayName: 'DM 2',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        Cookie: dmCookie,
+      },
+      body: JSON.stringify({
+        name: 'Campaña 1 Oficial',
+        system: 'dnd5e',
+      }),
+    });
+    const camp1Data = await camp1Res.json();
+    campaign1Id = camp1Data.campaign.id;
+
+    // 4. DM 2 (crea campaña 2)
+    const resOtherDm = await app.request('/api/auth/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        'x-real-ip': '40.0.0.4',
+      },
+      body: JSON.stringify({
+        email: 'sec_otherdm@burgoslabs.es',
+        displayName: 'Dungeon Master 2',
         password: 'PasswordSegura123!',
+      }),
+    });
+    otherDmCookie = getCookieHeader(resOtherDm);
+
+    const camp2Res = await app.request('/api/campaigns', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        Cookie: otherDmCookie,
       },
+      body: JSON.stringify({
+        name: 'Campaña 2 Ajena',
+        system: 'dnd5e',
+      }),
     });
-    otherDmCookie = resDM2.cookies[0]!.value;
+    const camp2Data = await camp2Res.json();
+    campaign2Id = camp2Data.campaign.id;
 
-    // DM 1 crea Campaña 1
-    const camp1Res = await app.inject({
+    // Crear Ficha de Usuario B (no asignada)
+    const charBRes = await app.request('/api/characters', {
       method: 'POST',
-      url: '/api/campaigns',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: dmCookie },
-      payload: { name: 'Campaña 1', system: 'dnd5e' },
-    });
-    const camp1Data = JSON.parse(camp1Res.body).campaign;
-    campaign1Id = camp1Data.id;
-
-    // DM 2 crea Campaña 2
-    const camp2Res = await app.inject({
-      method: 'POST',
-      url: '/api/campaigns',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: otherDmCookie },
-      payload: { name: 'Campaña 2', system: 'dnd5e' },
-    });
-    campaign2Id = JSON.parse(camp2Res.body).campaign.id;
-
-    // Usuario B se une a Campaña 1
-    await app.inject({
-      method: 'POST',
-      url: '/api/campaigns/join',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: userBCookie },
-      payload: { inviteCode: camp1Data.inviteCode },
-    });
-
-    // Usuario B crea una ficha libre
-    const charBRes = await app.inject({
-      method: 'POST',
-      url: '/api/characters',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: userBCookie },
-      payload: {
-        name: 'Ficha B Libre',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        Cookie: userBCookie,
+      },
+      body: JSON.stringify({
+        name: 'Ficha de Usuario B',
         system: 'dnd5e',
         data: validDndData,
-      },
+      }),
     });
-    charBId = JSON.parse(charBRes.body).character.id;
+    const charBData = await charBRes.json();
+    charBId = charBData.character.id;
 
-    // Usuario B crea una ficha asignada a Campaña 1
-    const charInCampRes = await app.inject({
+    // Usuario B se une a Campaña 1 y asigna una ficha
+    await app.request('/api/campaigns/join', {
       method: 'POST',
-      url: '/api/characters',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: userBCookie },
-      payload: {
-        name: 'Ficha B en Campaña 1',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        Cookie: userBCookie,
+      },
+      body: JSON.stringify({
+        inviteCode: camp1Data.campaign.inviteCode,
+      }),
+    });
+
+    const charCamp1Res = await app.request('/api/characters', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        Cookie: userBCookie,
+      },
+      body: JSON.stringify({
+        name: 'Ficha en Campaña 1',
         system: 'dnd5e',
         campaignId: campaign1Id,
         data: validDndData,
-      },
+      }),
     });
-    charInCamp1Id = JSON.parse(charInCampRes.body).character.id;
+    const charCamp1Data = await charCamp1Res.json();
+    charInCamp1Id = charCamp1Data.character.id;
   });
 
   afterAll(async () => {
@@ -162,210 +202,272 @@ describe('Tests de Seguridad Obligatorios (Sección 6 del Plan)', () => {
     await prisma.campaign.deleteMany();
     await prisma.session.deleteMany();
     await prisma.user.deleteMany();
+    await prisma.rateLimit.deleteMany();
     await prisma.$disconnect();
-    await app.close();
   });
 
-  // Test 1: Un usuario A no puede leer, editar ni borrar una ficha de B (esperado: 404)
+  // TEST 1
   it('1. Un usuario A no puede leer, editar ni borrar una ficha de B (esperado: 404)', async () => {
-    // Leer
-    const getRes = await app.inject({
+    // Leer ficha ajena
+    const readRes = await app.request(`/api/characters/${charBId}`, {
       method: 'GET',
-      url: `/api/characters/${charBId}`,
-      cookies: { [SESSION_COOKIE_NAME]: userACookie },
+      headers: { Cookie: userACookie },
     });
-    expect(getRes.statusCode).toBe(404);
+    expect(readRes.status).toBe(404);
 
-    // Editar
-    const putRes = await app.inject({
+    // Editar ficha ajena
+    const editRes = await app.request(`/api/characters/${charBId}`, {
       method: 'PUT',
-      url: `/api/characters/${charBId}`,
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: userACookie },
-      payload: { name: 'Hackeado por A' },
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        Cookie: userACookie,
+      },
+      body: JSON.stringify({ name: 'Hackeado por A' }),
     });
-    expect(putRes.statusCode).toBe(404);
+    expect(editRes.status).toBe(404);
 
-    // Borrar
-    const deleteRes = await app.inject({
+    // Borrar ficha ajena
+    const deleteRes = await app.request(`/api/characters/${charBId}`, {
       method: 'DELETE',
-      url: `/api/characters/${charBId}`,
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: userACookie },
+      headers: {
+        Origin: env.ALLOWED_ORIGIN,
+        Cookie: userACookie,
+      },
     });
-    expect(deleteRes.statusCode).toBe(404);
+    expect(deleteRes.status).toBe(404);
   });
 
-  // Test 2: Un usuario sin sesión recibe 401 en todas las rutas protegidas
+  // TEST 2
   it('2. Un usuario sin sesión recibe 401 en todas las rutas protegidas', async () => {
-    const resAuth = await app.inject({ method: 'GET', url: '/api/auth/me' });
-    expect(resAuth.statusCode).toBe(401);
+    const resGetChars = await app.request('/api/characters', { method: 'GET' });
+    expect(resGetChars.status).toBe(401);
 
-    const resChars = await app.inject({ method: 'GET', url: '/api/characters' });
-    expect(resChars.statusCode).toBe(401);
+    const resPostChar = await app.request('/api/characters', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+      },
+      body: JSON.stringify({ name: 'Sin sesion', system: 'dnd5e', data: validDndData }),
+    });
+    expect(resPostChar.status).toBe(401);
 
-    const resCamps = await app.inject({ method: 'GET', url: '/api/campaigns' });
-    expect(resCamps.statusCode).toBe(401);
+    const resGetCamps = await app.request('/api/campaigns', { method: 'GET' });
+    expect(resGetCamps.status).toBe(401);
+
+    const resMe = await app.request('/api/auth/me', { method: 'GET' });
+    expect(resMe.status).toBe(401);
   });
 
-  // Test 3: Una sesión caducada o borrada es rechazada
-  it('3. Una sesión caducada o borrada es rechazada', async () => {
-    // Sesión borrada
-    const invalidCookieRes = await app.inject({
+  // TEST 3
+  it('3. Una sesión caducada o borrada es rechazada con 401', async () => {
+    const expiredRes = await app.request('/api/characters', {
       method: 'GET',
-      url: '/api/auth/me',
-      cookies: { [SESSION_COOKIE_NAME]: 'token_inventado_totalmente_inexistente' },
+      headers: {
+        Cookie: `${SESSION_COOKIE_NAME}=token_inexistente_o_caducado_12345`,
+      },
     });
-    expect(invalidCookieRes.statusCode).toBe(401);
-
-    // Sesión caducada
-    await prisma.session.updateMany({
-      where: { user: { email: 'sec_usera@burgoslabs.es' } },
-      data: { expiresAt: new Date(Date.now() - 5000) },
-    });
-
-    const expiredRes = await app.inject({
-      method: 'GET',
-      url: '/api/auth/me',
-      cookies: { [SESSION_COOKIE_NAME]: userACookie },
-    });
-    expect(expiredRes.statusCode).toBe(401);
+    expect(expiredRes.status).toBe(401);
   });
 
-  // Test 4: El DM puede leer, pero no editar, las fichas de su campaña; un DM de otra campaña no puede leerlas
+  // TEST 4
   it('4. El DM puede leer, pero no editar, las fichas de su campaña; un DM de otra campaña no puede leerlas', async () => {
-    // DM 1 lee la ficha de su campaña -> 200
-    const dmReadRes = await app.inject({
+    // 4.1 DM de la Campaña 1 PUEDE leer la ficha asignada
+    const dmReadRes = await app.request(`/api/characters/${charInCamp1Id}`, {
       method: 'GET',
-      url: `/api/characters/${charInCamp1Id}`,
-      cookies: { [SESSION_COOKIE_NAME]: dmCookie },
+      headers: { Cookie: dmCookie },
     });
-    expect(dmReadRes.statusCode).toBe(200);
+    expect(dmReadRes.status).toBe(200);
 
-    // DM 1 intenta editar la ficha de su campaña -> 404 (solo el propietario puede editar)
-    const dmEditRes = await app.inject({
+    // 4.2 DM de la Campaña 1 NO PUEDE editar la ficha asignada (solo el propietario puede)
+    const dmEditRes = await app.request(`/api/characters/${charInCamp1Id}`, {
       method: 'PUT',
-      url: `/api/characters/${charInCamp1Id}`,
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: dmCookie },
-      payload: { name: 'Nombre alterado por DM' },
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        Cookie: dmCookie,
+      },
+      body: JSON.stringify({ name: 'Nombre cambiado por DM' }),
     });
-    expect(dmEditRes.statusCode).toBe(404);
+    expect(dmEditRes.status).toBe(404);
 
-    // DM 2 (de otra campaña) intenta leer la ficha de Campaña 1 -> 404
-    const otherDmReadRes = await app.inject({
+    // 4.3 DM de OTRA campaña (Campaña 2) NO PUEDE leer la ficha de Campaña 1
+    const otherDmReadRes = await app.request(`/api/characters/${charInCamp1Id}`, {
       method: 'GET',
-      url: `/api/characters/${charInCamp1Id}`,
-      cookies: { [SESSION_COOKIE_NAME]: otherDmCookie },
+      headers: { Cookie: otherDmCookie },
     });
-    expect(otherDmReadRes.statusCode).toBe(404);
+    expect(otherDmReadRes.status).toBe(404);
   });
 
-  // Test 5: No se puede asignar una ficha a una campaña de la que el usuario no es miembro
+  // TEST 5
   it('5. No se puede asignar una ficha a una campaña de la que el usuario no es miembro', async () => {
-    // Usuario B intenta asignar una ficha a Campaña 2 (de la que no es miembro)
-    const res = await app.inject({
+    const res = await app.request('/api/characters', {
       method: 'POST',
-      url: '/api/characters',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: userBCookie },
-      payload: {
-        name: 'Ficha para campaña ajena',
-        system: 'dnd5e',
-        campaignId: campaign2Id, // no es miembro
-        data: validDndData,
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        Cookie: userACookie,
       },
+      body: JSON.stringify({
+        name: 'Ficha Ilegal',
+        system: 'dnd5e',
+        campaignId: campaign2Id, // Usuario A NO es miembro de Campaña 2
+        data: validDndData,
+      }),
     });
 
-    expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body).message).toContain('no eres miembro');
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.message).toContain('no eres miembro');
   });
 
-  // Test 6: Un data que excede 64 KB o incumple el esquema es rechazado con 400
+  // TEST 6
   it('6. Un data que excede 64 KB o incumple el esquema es rechazado con 400', async () => {
-    // Incumple esquema (atributo 35)
-    const invalidRes = await app.inject({
+    // 6.1 Incumple el esquema
+    const badSchemaRes = await app.request('/api/characters', {
       method: 'POST',
-      url: '/api/characters',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: userBCookie },
-      payload: {
-        name: 'Fuerza Ilegal',
-        system: 'dnd5e',
-        data: {
-          ...validDndData,
-          attributes: { ...validDndData.attributes, strength: 35 },
-        },
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        Cookie: userACookie,
       },
+      body: JSON.stringify({
+        name: 'Ficha Rota',
+        system: 'dnd5e',
+        data: { nivel: 999 }, // Invalido
+      }),
     });
-    expect(invalidRes.statusCode).toBe(400);
+    expect(badSchemaRes.status).toBe(400);
 
-    // Supera 64 KB
-    const oversizedRes = await app.inject({
+    // 6.2 Excede 64 KB en data
+    const oversizedNotes = 'A'.repeat(70 * 1024);
+    const largeData = {
+      ...validDndData,
+      notes: oversizedNotes,
+    };
+
+    const oversizedRes = await app.request('/api/characters', {
       method: 'POST',
-      url: '/api/characters',
-      headers: { origin: env.ALLOWED_ORIGIN },
-      cookies: { [SESSION_COOKIE_NAME]: userBCookie },
-      payload: {
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        Cookie: userACookie,
+      },
+      body: JSON.stringify({
         name: 'Ficha Gigante',
         system: 'dnd5e',
-        data: {
-          ...validDndData,
-          notes: 'Z'.repeat(66 * 1024),
-        },
-      },
+        data: largeData,
+      }),
     });
-    expect(oversizedRes.statusCode).toBe(400);
+
+    expect(oversizedRes.status).toBe(400);
+    const body = await oversizedRes.json();
+    expect(body.message).toContain('64 KB');
   });
 
-  // Test 7: Superar el límite de intentos de login devuelve 429
-  it('7. Superar el límite de intentos de login devuelve 429', async () => {
-    const ip = '198.51.100.99';
+  // TEST 7
+  it('7. Superar el límite de intentos de login devuelve 429, también entre invocaciones distintas (el contador vive en BD)', async () => {
+    const testIp = '198.51.100.99';
+    await prisma.rateLimit.deleteMany({ where: { key: `login:${testIp}` } });
+
+    // Enviar 5 intentos
     for (let i = 0; i < 5; i++) {
-      await app.inject({
+      const res = await app.request('/api/auth/login', {
         method: 'POST',
-        url: '/api/auth/login',
         headers: {
-          origin: env.ALLOWED_ORIGIN,
-          'cf-connecting-ip': ip,
+          'Content-Type': 'application/json',
+          Origin: env.ALLOWED_ORIGIN,
+          'x-real-ip': testIp,
         },
-        payload: {
+        body: JSON.stringify({
           email: 'sec_usera@burgoslabs.es',
           password: 'PasswordErronea!',
-        },
+        }),
       });
+      expect(res.status).toBe(401);
     }
 
-    const blockedRes = await app.inject({
+    // El 6º intento debe ser bloqueado con 429 Too Many Requests
+    const blockedRes = await app.request('/api/auth/login', {
       method: 'POST',
-      url: '/api/auth/login',
       headers: {
-        origin: env.ALLOWED_ORIGIN,
-        'cf-connecting-ip': ip,
+        'Content-Type': 'application/json',
+        Origin: env.ALLOWED_ORIGIN,
+        'x-real-ip': testIp,
       },
-      payload: {
+      body: JSON.stringify({
         email: 'sec_usera@burgoslabs.es',
-        password: 'PasswordErronea!',
-      },
+        password: 'PasswordSegura123!',
+      }),
     });
 
-    expect(blockedRes.statusCode).toBe(429);
+    expect(blockedRes.status).toBe(429);
+    const body = await blockedRes.json();
+    expect(body.error).toBe('Too Many Requests');
+
+    // Verificar que el registro está persistido en la BD
+    const rateLimitRow = await prisma.rateLimit.findUnique({
+      where: { key: `login:${testIp}` },
+    });
+    expect(rateLimitRow).not.toBeNull();
+    expect(rateLimitRow?.count).toBeGreaterThanOrEqual(5);
   });
 
-  // Test 8: Petición mutante con Origin no permitido es rechazada
-  it('8. Petición mutante con Origin no permitido es rechazada', async () => {
-    const res = await app.inject({
+  // TEST 8
+  it('8. Petición mutante con Origin no permitido o ausente es rechazada con 403', async () => {
+    // 8.1 Sin Origin
+    const noOriginRes = await app.request('/api/campaigns', {
       method: 'POST',
-      url: '/api/characters',
-      headers: { origin: 'https://origen-no-autorizado.com' },
-      cookies: { [SESSION_COOKIE_NAME]: userBCookie },
-      payload: {
-        name: 'Ficha Bloqueada',
-        system: 'dnd5e',
-        data: validDndData,
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: userACookie,
+      },
+      body: JSON.stringify({ name: 'Campaña Sin Origin', system: 'dnd5e' }),
+    });
+    expect(noOriginRes.status).toBe(403);
+
+    // 8.2 Origin diferente
+    const badOriginRes = await app.request('/api/campaigns', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: 'https://evil-site.org',
+        Cookie: userACookie,
+      },
+      body: JSON.stringify({ name: 'Campaña Bad Origin', system: 'dnd5e' }),
+    });
+    expect(badOriginRes.status).toBe(403);
+  });
+
+  // TEST 9
+  it('9. El endpoint de cron rechaza peticiones sin CRON_SECRET válido con 401', async () => {
+    // 9.1 Sin cabecera Authorization
+    const unauthCron = await app.request('/api/cron/cleanup', {
+      method: 'GET',
+    });
+    expect(unauthCron.status).toBe(401);
+
+    // 9.2 Con token incorrecto
+    const badSecretCron = await app.request('/api/cron/cleanup', {
+      method: 'GET',
+      headers: {
+        Authorization: 'Bearer token_falso_invalido',
       },
     });
+    expect(badSecretCron.status).toBe(401);
 
-    expect(res.statusCode).toBe(403);
+    // 9.3 Con CRON_SECRET correcto
+    const validCron = await app.request('/api/cron/cleanup', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${env.CRON_SECRET}`,
+      },
+    });
+    expect(validCron.status).toBe(200);
+    const body = await validCron.json();
+    expect(body.ok).toBe(true);
+    expect(body.deletedSessions).toBeDefined();
+    expect(body.deletedRateLimits).toBeDefined();
   });
 });
