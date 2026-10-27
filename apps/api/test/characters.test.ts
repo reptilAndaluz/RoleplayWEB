@@ -3,7 +3,6 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createApp } from '../src/app.js';
 import { prisma } from '../src/lib/prisma.js';
 import { env } from '../src/config/env.js';
-import { SESSION_COOKIE_NAME } from '../src/lib/tokens.js';
 import type { Hono } from 'hono';
 
 describe('Módulo de Personajes (API Hono)', () => {
