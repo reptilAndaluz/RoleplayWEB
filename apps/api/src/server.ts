@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyError } from 'fastify';
 import http from 'node:http';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
@@ -99,7 +99,7 @@ export function buildServer() {
   app.register(charactersRoutes, { prefix: '/api/characters' });
 
   // Manejador de errores global seguro (sin stack traces en producción)
-  app.setErrorHandler((error, request, reply) => {
+  app.setErrorHandler((error: FastifyError, request, reply) => {
     const statusCode = error.statusCode || 500;
 
     request.log.error(error);
