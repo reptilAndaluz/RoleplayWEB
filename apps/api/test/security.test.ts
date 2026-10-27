@@ -318,6 +318,40 @@ describe('Tests de Seguridad Obligatorios (Sección 6 del Plan)', () => {
     expect(oversizedRes.statusCode).toBe(400);
   });
 
+  // Test 7: Superar el límite de intentos de login devuelve 429
+  it('7. Superar el límite de intentos de login devuelve 429', async () => {
+    const ip = '198.51.100.99';
+    for (let i = 0; i < 5; i++) {
+      await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        headers: {
+          origin: env.ALLOWED_ORIGIN,
+          'cf-connecting-ip': ip,
+        },
+        payload: {
+          email: 'sec_usera@burgoslabs.es',
+          password: 'PasswordErronea!',
+        },
+      });
+    }
+
+    const blockedRes = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      headers: {
+        origin: env.ALLOWED_ORIGIN,
+        'cf-connecting-ip': ip,
+      },
+      payload: {
+        email: 'sec_usera@burgoslabs.es',
+        password: 'PasswordErronea!',
+      },
+    });
+
+    expect(blockedRes.statusCode).toBe(429);
+  });
+
   // Test 8: Petición mutante con Origin no permitido es rechazada
   it('8. Petición mutante con Origin no permitido es rechazada', async () => {
     const res = await app.inject({

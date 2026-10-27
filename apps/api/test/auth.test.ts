@@ -197,7 +197,7 @@ describe('Módulo de Autenticación (API)', () => {
       const loginRes = await app.inject({
         method: 'POST',
         url: '/api/auth/login',
-        headers: { origin: env.ALLOWED_ORIGIN },
+        headers: { origin: env.ALLOWED_ORIGIN, 'cf-connecting-ip': '10.0.1.1' },
         payload: {
           email: 'hero@burgoslabs.es',
           password: 'PasswordSegura123!',
@@ -224,13 +224,14 @@ describe('Módulo de Autenticación (API)', () => {
       const loginRes = await app.inject({
         method: 'POST',
         url: '/api/auth/login',
-        headers: { origin: env.ALLOWED_ORIGIN },
+        headers: { origin: env.ALLOWED_ORIGIN, 'cf-connecting-ip': '10.0.1.2' },
         payload: {
           email: 'hero@burgoslabs.es',
           password: 'PasswordSegura123!',
         },
       });
       const cookie = loginRes.cookies[0];
+      expect(cookie).toBeDefined();
 
       // Modificar la sesión en BD para forzar su caducidad
       await prisma.session.updateMany({
@@ -253,13 +254,14 @@ describe('Módulo de Autenticación (API)', () => {
       const loginRes = await app.inject({
         method: 'POST',
         url: '/api/auth/login',
-        headers: { origin: env.ALLOWED_ORIGIN },
+        headers: { origin: env.ALLOWED_ORIGIN, 'cf-connecting-ip': '10.0.1.3' },
         payload: {
           email: 'hero@burgoslabs.es',
           password: 'PasswordSegura123!',
         },
       });
       const cookie = loginRes.cookies[0];
+      expect(cookie).toBeDefined();
 
       // Borrar todas las sesiones
       await prisma.session.deleteMany();
@@ -282,7 +284,7 @@ describe('Módulo de Autenticación (API)', () => {
       const loginRes = await app.inject({
         method: 'POST',
         url: '/api/auth/login',
-        headers: { origin: env.ALLOWED_ORIGIN },
+        headers: { origin: env.ALLOWED_ORIGIN, 'cf-connecting-ip': '10.0.1.4' },
         payload: {
           email: 'hero@burgoslabs.es',
           password: 'PasswordSegura123!',
