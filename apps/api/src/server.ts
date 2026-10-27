@@ -5,6 +5,7 @@ import { HealthSchema, type Health } from '@rol/shared';
 import csrfPlugin from './plugins/csrf.js';
 import authPlugin from './plugins/auth.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
+import { campaignsRoutes } from './modules/campaigns/campaigns.routes.js';
 
 export function buildServer() {
   const app = Fastify({
@@ -33,6 +34,7 @@ export function buildServer() {
 
   // Módulos
   app.register(authRoutes, { prefix: '/api/auth' });
+  app.register(campaignsRoutes, { prefix: '/api/campaigns' });
 
   // Health check
   app.get('/health', async (_request, reply): Promise<Health> => {
