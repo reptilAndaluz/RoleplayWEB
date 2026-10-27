@@ -181,9 +181,12 @@ campaignsModule.get('/:id/characters', async (c) => {
 
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
+    include: {
+      members: true,
+    },
   });
 
-  if (!campaign) {
+  if (!campaign || !canReadCampaign(user.id, campaign)) {
     return c.json(
       {
         statusCode: 404,
