@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm --workspace=packages/shared run build && npm --workspace=apps/web run build",
+  "buildCommand": "npx prisma generate --schema=./apps/api/prisma/schema.prisma && npm --workspace=packages/shared run build && npm --workspace=apps/web run build",
   "outputDirectory": "apps/web/dist",
   "rewrites": [
     {
