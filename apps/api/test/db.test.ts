@@ -119,4 +119,30 @@ describe('Base de datos: Verificación de Esquema e Integridad Relacional', () =
     expect(updatedChar).not.toBeNull();
     expect(updatedChar?.campaignId).toBeNull();
   });
+
+  it('permite registrar y actualizar contadores de RateLimit persistentes', async () => {
+    const key = 'login:192.168.1.100';
+    const record = await prisma.rateLimit.upsert({
+      where: { key },
+      create: {
+        key,
+        count: 1,
+        windowStart: new Date(),
+      },
+      update: {
+        count: { increment: 1 },
+      },
+    });
+
+    expect(record.key).toBe(key);
+    expect(record.count).toBe(1);
+
+    const incremented = await prisma.rateLimit.update({
+      where: { key },
+      data: { count: { increment: 1 } },
+    });
+    expect(incremented.count).toBe(2);
+
+    await prisma.rateLimit.delete({ where: { key } });
+  });
 });

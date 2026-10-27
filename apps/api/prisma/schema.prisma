@@ -1,6 +1,7 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -28,6 +29,7 @@ model Session {
   createdAt DateTime @default(now())
 
   @@index([userId])
+  @@index([expiresAt])
 }
 
 model Campaign {
@@ -71,4 +73,11 @@ model Character {
 
   @@index([ownerId])
   @@index([campaignId])
+}
+
+// Rate limiting compartido entre instancias serverless
+model RateLimit {
+  key         String   @id // p. ej. "login:<ip>" o "register:<ip>"
+  count       Int
+  windowStart DateTime
 }
