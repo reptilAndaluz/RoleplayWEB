@@ -10,7 +10,7 @@ export const AuthView: React.FC = () => {
   const [generalError, setGeneralError] = useState<string | null>(null);
 
   // Form states
-  const [name, setName] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -25,7 +25,7 @@ export const AuthView: React.FC = () => {
     resetForm();
 
     if (isRegister) {
-      const result = RegisterInputSchema.safeParse({ name, email, password });
+      const result = RegisterInputSchema.safeParse({ displayName, email, password });
       if (!result.success) {
         const errors: Record<string, string> = {};
         for (const issue of result.error.issues) {
@@ -150,12 +150,12 @@ export const AuthView: React.FC = () => {
                 className="form-input"
                 type="text"
                 placeholder="Ej. Gandalf o Tu Nombre"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
                 autoComplete="name"
                 required
               />
-              {fieldErrors.name && <span className="form-error">{fieldErrors.name}</span>}
+              {fieldErrors.displayName && <span className="form-error">{fieldErrors.displayName}</span>}
             </div>
           )}
 
