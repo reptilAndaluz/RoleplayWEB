@@ -206,10 +206,10 @@ El agente **no puede** hacer esto; déjalo como lista de verificación en `docs/
 
 ## 7. Definición de "terminado"
 
-- [ ] Los hallazgos 1 a 5 corregidos y verificados.
-- [ ] `docs/AUDITORIA.md` completo con la revisión de la Fase 4.
-- [ ] Los 9 tests de seguridad existen y pasan.
-- [ ] `npm audit` sin vulnerabilidades altas o críticas.
-- [ ] Ningún secreto real rastreado por Git ni en el historial sin rotar.
-- [ ] Lista de la Fase 5 entregada al propietario.
-- [ ] PR revisada y fusionada solo con CI en verde.
+- [x] Los hallazgos 1 a 5 corregidos y verificados.
+- [x] `docs/AUDITORIA.md` completo con la revisión de la Fase 4.
+- [x] Los 9 tests de seguridad existen y pasan (83/83 en total).
+- [x] `npm audit` sin vulnerabilidades altas o críticas (0 vulnerabilidades).
+- [x] Ningún secreto real rastreado por Git ni en el historial sin rotar.
+- [x] Lista de la Fase 5 entregada al propietario en `docs/DESPLIEGUE.md`.
+- [ ] PR revisada y fusionada solo con CI en verde (acción del propietario).
