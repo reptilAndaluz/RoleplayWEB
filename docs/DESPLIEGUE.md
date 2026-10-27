@@ -109,3 +109,25 @@ Para garantizar la estabilidad en producción:
 2. Añadir una regla de protección para `main`:
    - Marcar **Require a pull request before merging**.
    - Marcar **Require status checks to pass before merging** (verificando que los tests de Vitest pasen en CI antes del merge).
+
+---
+
+## 7. Lista de Verificación de Seguridad Externa para el Propietario (Fase 5)
+
+Las siguientes tareas requieren acceso a los paneles administrativos de Vercel, Neon y GitHub y deben ser completadas manualmente por el propietario del proyecto:
+
+- [ ] **Rotación y confirmación de `CRON_SECRET`**:
+  En el panel de Vercel (**Settings > Environment Variables**), confirmar que la variable `CRON_SECRET` de producción tiene un valor aleatorio generado mediante `openssl rand -hex 32` (al menos 32 caracteres criptográficos) y **nunca** el valor de ejemplo (`change_this_cron_secret...`). Si en algún momento se utilizó el valor por defecto, **rotarlo inmediatamente**.
+- [ ] **Rotación de credenciales de Neon**:
+  Rotar la contraseña del usuario de base de datos en Neon Console (**Settings > Reset password**) y actualizar tanto `DATABASE_URL` como `DIRECT_URL` en las variables de entorno de Vercel. Asegurarse de que ningún secreto antiguo del historial de Git siga activo.
+- [ ] **Separación estricta de bases de datos entre entornos**:
+  Comprobar que el entorno de **Production** en Vercel apunta a la rama `main` de Neon y que el entorno de **Preview** apunta a una base de datos o rama separada (`dev`). Nunca compartir la base de datos de producción con despliegues de preview.
+- [ ] **Protección de despliegues en Vercel**:
+  En Vercel (**Settings > Deployment Protection**), activar la protección de despliegues (Vercel Authentication o contraseña compartida) para los despliegues de *Preview* si no se desea que sean públicos.
+- [ ] **Seguridad del repositorio en GitHub**:
+  - Activar **Dependabot alerts** y **Dependabot security updates** en **Settings > Code security and analysis**.
+  - Activar **Secret scanning** y **Push protection** para bloquear en tiempo real commits que contengan credenciales o tokens.
+  - Configurar las reglas de protección de rama en `main` exigiendo Pull Request y comprobación de tests en verde.
+- [ ] **Verificación de `ALLOWED_ORIGIN` en Producción**:
+  Confirmar que en el entorno de producción de Vercel el valor de `ALLOWED_ORIGIN` está configurado exactamente a `https://rol.burgoslabs.es` (sin barra final ni comodines).
+
