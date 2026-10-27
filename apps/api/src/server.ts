@@ -1,6 +1,10 @@
 import Fastify from 'fastify';
+import cookie from '@fastify/cookie';
 import { env } from './config/env.js';
 import { HealthSchema, type Health } from '@rol/shared';
+import csrfPlugin from './plugins/csrf.js';
+import authPlugin from './plugins/auth.js';
+import { authRoutes } from './modules/auth/auth.routes.js';
 
 export function buildServer() {
   const app = Fastify({
@@ -15,9 +19,22 @@ export function buildServer() {
               },
             },
           }
-        : true,
+        : false,
   });
 
+  // Cookies y sesión
+  app.register(cookie, {
+    secret: env.SESSION_SECRET,
+  });
+
+  // Plugins transversales de seguridad y contexto
+  app.register(csrfPlugin);
+  app.register(authPlugin);
+
+  // Módulos
+  app.register(authRoutes, { prefix: '/api/auth' });
+
+  // Health check
   app.get('/health', async (_request, reply): Promise<Health> => {
     const healthData: Health = {
       status: 'ok',

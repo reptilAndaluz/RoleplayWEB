@@ -33,3 +33,13 @@ Este documento registra las decisiones tomadas durante el desarrollo del proyect
   - `docker-compose.yml`: Archivo de producción con servicios `db`, `api`, `caddy`, `cloudflared` operando exclusivamente en una red bridge interna `internal`, sin ningún puerto de PostgreSQL expuesto.
   - `docker-compose.dev.yml`: Archivo para entorno de desarrollo local que expone `127.0.0.1:5432:5432` con volumen aislado `pgdata_dev`.
   - Se añadieron scripts `npm run db:up`, `npm run db:down` y `npm run db:logs` al `package.json` raíz para facilitar el flujo de desarrollo.
+
+## DEC-004: Autenticación, cookies y prevención de timing attacks
+- **Fecha:** 2026-10-27
+- **Contexto:** Se requiere autenticación basada en servidor con cookies seguras y hash con argon2id, protegiendo contra ataques de enumeración y CSRF.
+- **Decisión:**
+  - Se utiliza `argon2` configurado en variante `argon2id` (64 MB de memoria, tiempo de iteración 3 y 4 hilos en paralelo).
+  - En login, si el usuario no existe en la base de datos, se ejecuta una verificación con hash dummy contra la contraseña suministrada para unificar el tiempo de respuesta y neutralizar ataques de temporización / enumeración.
+  - Los tokens de sesión se generan mediante 32 bytes de entropía criptográfica (`crypto.randomBytes(32)`), y en la base de datos se almacena única y exclusivamente su resumen criptográfico SHA-256 (`tokenHash`).
+  - La cookie `rol_session` se envía con `HttpOnly; SameSite=Lax; Path=/; Max-Age=604800` (7 días), y el flag `Secure` se activa dinámicamente cuando `NODE_ENV === 'production'`, facilitando el desarrollo local sobre HTTP.
+  - Se implementó un hook global CSRF en Fastify que rechaza peticiones mutantes (`POST`, `PUT`, `PATCH`, `DELETE`) cuya cabecera `Origin` no coincida con `ALLOWED_ORIGIN`.
