@@ -65,7 +65,6 @@ Esta guía describe el procedimiento paso a paso para desplegar la plataforma ut
    | `DATABASE_URL` | Rama `main` de Neon (con `-pooler`) | Rama `dev` de Neon (con `-pooler`) | Cadena de conexión para runtime |
    | `DIRECT_URL` | Rama `main` de Neon (directa) | Rama `dev` de Neon (directa) | Cadena directa para migraciones |
    | `ALLOWED_ORIGIN` | `https://rol.burgoslabs.es` | `https://*.vercel.app` | Origen autorizado para CORS y CSRF |
-   | `SESSION_SECRET` | Generado con `openssl rand -base64 32` | Generado con `openssl rand -base64 32` | Clave secreta para cookies de sesión |
    | `CRON_SECRET` | Generado con `openssl rand -hex 32` | Generado con `openssl rand -hex 32` | Token de autorización de Vercel Cron |
    | `NODE_ENV` | `production` | `production` | Entorno de ejecución |
 

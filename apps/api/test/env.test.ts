@@ -5,8 +5,7 @@ describe('Validación de variables de entorno (env.ts)', () => {
   it('falla si falta DATABASE_URL', () => {
     const res = envSchema.safeParse({
       DIRECT_URL: 'postgresql://postgres:pass@localhost:5432/db',
-      SESSION_SECRET: '12345678901234567890123456789012',
-      CRON_SECRET: 'secret_cron_123456',
+      CRON_SECRET: 'ae49dc21e8fdf97bfe555527ff99370afad3411cc439d74c88510afdee0bc1ae',
       ALLOWED_ORIGIN: 'http://localhost:5173',
     });
     expect(res.success).toBe(false);
@@ -18,8 +17,7 @@ describe('Validación de variables de entorno (env.ts)', () => {
   it('falla si falta DIRECT_URL', () => {
     const res = envSchema.safeParse({
       DATABASE_URL: 'postgresql://postgres:pass@localhost:5432/db',
-      SESSION_SECRET: '12345678901234567890123456789012',
-      CRON_SECRET: 'secret_cron_123456',
+      CRON_SECRET: 'ae49dc21e8fdf97bfe555527ff99370afad3411cc439d74c88510afdee0bc1ae',
       ALLOWED_ORIGIN: 'http://localhost:5173',
     });
     expect(res.success).toBe(false);
@@ -32,7 +30,6 @@ describe('Validación de variables de entorno (env.ts)', () => {
     const res = envSchema.safeParse({
       DATABASE_URL: 'postgresql://postgres:pass@localhost:5432/db',
       DIRECT_URL: 'postgresql://postgres:pass@localhost:5432/db',
-      SESSION_SECRET: '12345678901234567890123456789012',
       ALLOWED_ORIGIN: 'http://localhost:5173',
     });
     expect(res.success).toBe(false);
@@ -41,17 +38,29 @@ describe('Validación de variables de entorno (env.ts)', () => {
     }
   });
 
-  it('falla si SESSION_SECRET tiene menos de 32 caracteres', () => {
+  it('falla si CRON_SECRET tiene menos de 32 caracteres', () => {
     const res = envSchema.safeParse({
       DATABASE_URL: 'postgresql://postgres:pass@localhost:5432/db',
       DIRECT_URL: 'postgresql://postgres:pass@localhost:5432/db',
-      SESSION_SECRET: 'corta',
-      CRON_SECRET: 'secret_cron_123456',
+      CRON_SECRET: 'corta',
       ALLOWED_ORIGIN: 'http://localhost:5173',
     });
     expect(res.success).toBe(false);
     if (!res.success) {
-      expect(res.error.issues.some((i) => i.path.includes('SESSION_SECRET'))).toBe(true);
+      expect(res.error.issues.some((i) => i.path.includes('CRON_SECRET'))).toBe(true);
+    }
+  });
+
+  it('falla si CRON_SECRET usa el valor de ejemplo (change_this...)', () => {
+    const res = envSchema.safeParse({
+      DATABASE_URL: 'postgresql://postgres:pass@localhost:5432/db',
+      DIRECT_URL: 'postgresql://postgres:pass@localhost:5432/db',
+      CRON_SECRET: 'change_this_cron_secret_generated_random_value',
+      ALLOWED_ORIGIN: 'http://localhost:5173',
+    });
+    expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.issues.some((i) => i.path.includes('CRON_SECRET'))).toBe(true);
     }
   });
 
@@ -59,8 +68,7 @@ describe('Validación de variables de entorno (env.ts)', () => {
     const res = envSchema.safeParse({
       DATABASE_URL: 'postgresql://postgres:pass@localhost:5432/db',
       DIRECT_URL: 'postgresql://postgres:pass@localhost:5432/db',
-      SESSION_SECRET: '12345678901234567890123456789012',
-      CRON_SECRET: 'secret_cron_123456',
+      CRON_SECRET: 'ae49dc21e8fdf97bfe555527ff99370afad3411cc439d74c88510afdee0bc1ae',
     });
     expect(res.success).toBe(false);
     if (!res.success) {
@@ -68,12 +76,11 @@ describe('Validación de variables de entorno (env.ts)', () => {
     }
   });
 
-  it('valida exitosamente cuando todas las variables requeridas están presentes', () => {
+  it('valida exitosamente cuando todas las variables requeridas están presentes con valores válidos', () => {
     const res = envSchema.safeParse({
       DATABASE_URL: 'postgresql://postgres:pass@localhost:5432/db',
       DIRECT_URL: 'postgresql://postgres:pass@localhost:5432/db',
-      SESSION_SECRET: '12345678901234567890123456789012',
-      CRON_SECRET: 'secret_cron_123456',
+      CRON_SECRET: 'ae49dc21e8fdf97bfe555527ff99370afad3411cc439d74c88510afdee0bc1ae',
       ALLOWED_ORIGIN: 'http://localhost:5173',
       NODE_ENV: 'test',
     });

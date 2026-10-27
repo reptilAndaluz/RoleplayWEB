@@ -7,13 +7,15 @@ dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 dotenv.config();
 
+export const notPlaceholder = (v: string) => !v.startsWith('change_this');
+
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1, { message: 'DATABASE_URL es obligatoria' }),
   DIRECT_URL: z.string().min(1, { message: 'DIRECT_URL es obligatoria' }),
-  SESSION_SECRET: z
+  CRON_SECRET: z
     .string()
-    .min(32, { message: 'SESSION_SECRET debe tener al menos 32 caracteres para ser seguro' }),
-  CRON_SECRET: z.string().min(16, { message: 'CRON_SECRET es obligatorio' }),
+    .min(32, { message: 'CRON_SECRET debe tener al menos 32 caracteres para ser seguro' })
+    .refine(notPlaceholder, { message: 'CRON_SECRET no puede usar el valor de ejemplo' }),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   ALLOWED_ORIGIN: z.string().min(1, { message: 'ALLOWED_ORIGIN es obligatoria' }),
   PORT: z.coerce.number().int().positive().default(3000),
