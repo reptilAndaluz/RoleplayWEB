@@ -1,0 +1,74 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String           @id @default(uuid())
+  email        String           @unique
+  displayName  String
+  passwordHash String
+  createdAt    DateTime         @default(now())
+  sessions     Session[]
+  characters   Character[]
+  memberships  CampaignMember[]
+  campaigns    Campaign[]       @relation("CampaignDM")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique // SHA-256 del token; el token en claro nunca se guarda
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Campaign {
+  id         String           @id @default(uuid())
+  name       String
+  system     String
+  inviteCode String           @unique
+  dmId       String
+  dm         User             @relation("CampaignDM", fields: [dmId], references: [id])
+  members    CampaignMember[]
+  characters Character[]
+  createdAt  DateTime         @default(now())
+}
+
+enum CampaignRole {
+  DM
+  PLAYER
+}
+
+model CampaignMember {
+  campaignId String
+  userId     String
+  role       CampaignRole
+  campaign   Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([campaignId, userId])
+}
+
+model Character {
+  id         String    @id @default(uuid())
+  ownerId    String
+  owner      User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  system     String // "dnd5e", etc.
+  name       String
+  data       Json // contenido validado con Zod según `system`
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([ownerId])
+  @@index([campaignId])
+}

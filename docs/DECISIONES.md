@@ -25,3 +25,11 @@ Este documento registra las decisiones tomadas durante el desarrollo del proyect
   - Vitest: `5.0.5` (versión asegurada sin vulnerabilidades en tinypool/esbuild).
   - `@types/node`: `22.20.5`, `tsx`: `4.23.15`.
   - Resultado: `npm audit` reporta 0 vulnerabilidades.
+
+## DEC-003: Estrategia Docker Compose para desarrollo vs producción
+- **Fecha:** 2026-10-27
+- **Contexto:** El plan exige estrictamente que el servicio `db` en producción no publique ningún puerto al exterior (`sin ports` en `docker-compose.yml`), pero para el desarrollo local y la ejecución de `prisma migrate dev` desde el host se requiere acceso a PostgreSQL en `localhost:5432`.
+- **Decisión:**
+  - `docker-compose.yml`: Archivo de producción con servicios `db`, `api`, `caddy`, `cloudflared` operando exclusivamente en una red bridge interna `internal`, sin ningún puerto de PostgreSQL expuesto.
+  - `docker-compose.dev.yml`: Archivo para entorno de desarrollo local que expone `127.0.0.1:5432:5432` con volumen aislado `pgdata_dev`.
+  - Se añadieron scripts `npm run db:up`, `npm run db:down` y `npm run db:logs` al `package.json` raíz para facilitar el flujo de desarrollo.
