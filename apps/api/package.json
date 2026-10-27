@@ -11,21 +11,16 @@
     "prisma:migrate": "prisma migrate dev"
   },
   "dependencies": {
-    "@fastify/cookie": "11.1.5",
-    "@fastify/cors": "11.3.1",
-    "@fastify/helmet": "13.2.0",
-    "@fastify/rate-limit": "11.2.1",
+    "@hono/node-server": "2.1.5",
     "@prisma/client": "5.22.0",
     "@rol/shared": "*",
     "argon2": "0.45.1",
     "dotenv": "16.4.5",
-    "fastify": "5.12.7",
-    "fastify-plugin": "6.0.1",
+    "hono": "4.13.14",
     "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
-    "pino-pretty": "11.1.0",
     "prisma": "5.22.0",
     "tsx": "4.23.15",
     "typescript": "5.4.5"

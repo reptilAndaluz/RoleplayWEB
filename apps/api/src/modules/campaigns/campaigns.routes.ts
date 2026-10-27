@@ -1,125 +1,217 @@
-import type { FastifyPluginAsync } from 'fastify';
-import { z } from 'zod';
+import { Hono } from 'hono';
+import crypto from 'node:crypto';
 import { CreateCampaignInputSchema, JoinCampaignInputSchema } from '@rol/shared';
-import { campaignsService } from './campaigns.service.js';
+import { prisma } from '../../lib/prisma.js';
+import { authMiddleware, type AuthContextVariables } from '../../middleware/auth.js';
+import { canReadCampaign, canManageCampaign } from '../../lib/authz.js';
 
-const CampaignParamsSchema = z.object({
-  id: z.string().uuid({ message: 'El id de campaña debe ser un UUID válido' }),
+export const campaignsModule = new Hono<{ Variables: AuthContextVariables }>();
+
+campaignsModule.use('*', authMiddleware);
+
+// GET /api/campaigns
+campaignsModule.get('/', async (c) => {
+  const user = c.get('user');
+
+  const campaigns = await prisma.campaign.findMany({
+    where: {
+      OR: [
+        { dmId: user.id },
+        { members: { some: { userId: user.id } } },
+      ],
+    },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      dm: { select: { id: true, displayName: true } },
+      _count: {
+        select: {
+          members: true,
+          characters: true,
+        },
+      },
+    },
+  });
+
+  return c.json({ campaigns }, 200);
 });
 
-const PaginationQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).optional(),
-  limit: z.coerce.number().int().min(1).max(50).optional(),
-});
+// POST /api/campaigns
+campaignsModule.post('/', async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => null);
+  const parseResult = CreateCampaignInputSchema.safeParse(body);
 
-export const campaignsRoutes: FastifyPluginAsync = async (fastify) => {
-  // Todas las rutas de campañas requieren autenticación
-  fastify.addHook('preHandler', fastify.authenticate);
-
-  // POST /api/campaigns
-  fastify.post('/', async (request, reply) => {
-    const parseResult = CreateCampaignInputSchema.safeParse(request.body);
-    if (!parseResult.success) {
-      return reply.status(400).send({
+  if (!parseResult.success) {
+    return c.json(
+      {
         statusCode: 400,
         error: 'Bad Request',
         message: parseResult.error.issues.map((i) => i.message).join(', '),
         issues: parseResult.error.issues,
-      });
-    }
+      },
+      400
+    );
+  }
 
-    const campaign = await campaignsService.createCampaign(request.user!.id, parseResult.data);
-    return reply.status(201).send({ campaign });
+  // Código criptográficamente seguro
+  const inviteCode = crypto.randomBytes(4).toString('hex').toUpperCase();
+
+  const campaign = await prisma.campaign.create({
+    data: {
+      name: parseResult.data.name,
+      system: parseResult.data.system || 'dnd5e',
+      inviteCode,
+      dmId: user.id,
+      members: {
+        create: {
+          userId: user.id,
+          role: 'DM',
+        },
+      },
+    },
+    include: {
+      dm: { select: { id: true, displayName: true } },
+      members: {
+        include: {
+          user: { select: { id: true, displayName: true } },
+        },
+      },
+    },
   });
 
-  // GET /api/campaigns
-  fastify.get('/', async (request, reply) => {
-    const parseQuery = PaginationQuerySchema.safeParse(request.query);
-    const query = parseQuery.success ? parseQuery.data : {};
+  return c.json({ campaign }, 201);
+});
 
-    const result = await campaignsService.listUserCampaigns(request.user!.id, query);
-    return reply.status(200).send(result);
-  });
+// POST /api/campaigns/join
+campaignsModule.post('/join', async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => null);
+  const parseResult = JoinCampaignInputSchema.safeParse(body);
 
-  // POST /api/campaigns/join
-  fastify.post('/join', async (request, reply) => {
-    const parseResult = JoinCampaignInputSchema.safeParse(request.body);
-    if (!parseResult.success) {
-      return reply.status(400).send({
+  if (!parseResult.success) {
+    return c.json(
+      {
         statusCode: 400,
         error: 'Bad Request',
         message: parseResult.error.issues.map((i) => i.message).join(', '),
         issues: parseResult.error.issues,
-      });
-    }
+      },
+      400
+    );
+  }
 
-    try {
-      const campaign = await campaignsService.joinCampaign(request.user!.id, parseResult.data);
-      return reply.status(200).send({ campaign });
-    } catch (err: unknown) {
-      const error = err as Error & { statusCode?: number };
-      const statusCode = error.statusCode || 500;
-      return reply.status(statusCode).send({
-        statusCode,
-        error: statusCode === 404 ? 'Not Found' : 'Internal Server Error',
-        message: error.message,
-      });
-    }
+  const campaign = await prisma.campaign.findUnique({
+    where: { inviteCode: parseResult.data.inviteCode.trim().toUpperCase() },
   });
 
-  // GET /api/campaigns/:id
-  fastify.get('/:id', async (request, reply) => {
-    const parseParams = CampaignParamsSchema.safeParse(request.params);
-    if (!parseParams.success) {
-      return reply.status(404).send({
+  if (!campaign) {
+    return c.json(
+      {
+        statusCode: 404,
+        error: 'Not Found',
+        message: 'No existe ninguna campaña con el código de invitación proporcionado',
+      },
+      404
+    );
+  }
+
+  // Verificar si ya es miembro
+  const existingMember = await prisma.campaignMember.findUnique({
+    where: {
+      campaignId_userId: {
+        campaignId: campaign.id,
+        userId: user.id,
+      },
+    },
+  });
+
+  if (!existingMember) {
+    await prisma.campaignMember.create({
+      data: {
+        campaignId: campaign.id,
+        userId: user.id,
+        role: 'PLAYER',
+      },
+    });
+  }
+
+  return c.json({ campaign }, 200);
+});
+
+// GET /api/campaigns/:id
+campaignsModule.get('/:id', async (c) => {
+  const user = c.get('user');
+  const campaignId = c.req.param('id');
+
+  const campaign = await prisma.campaign.findUnique({
+    where: { id: campaignId },
+    include: {
+      dm: { select: { id: true, displayName: true, email: true } },
+      members: {
+        include: {
+          user: { select: { id: true, displayName: true, email: true } },
+        },
+      },
+      characters: {
+        include: {
+          owner: { select: { id: true, displayName: true } },
+        },
+      },
+    },
+  });
+
+  if (!campaign || !canReadCampaign(user.id, campaign)) {
+    return c.json(
+      {
         statusCode: 404,
         error: 'Not Found',
         message: 'Campaña no encontrada',
-      });
-    }
+      },
+      404
+    );
+  }
 
-    try {
-      const campaign = await campaignsService.getCampaignById(
-        request.user!.id,
-        parseParams.data.id,
-      );
-      return reply.status(200).send({ campaign });
-    } catch (err: unknown) {
-      const error = err as Error & { statusCode?: number };
-      const statusCode = error.statusCode || 404;
-      return reply.status(statusCode).send({
-        statusCode,
-        error: 'Not Found',
-        message: error.message || 'Campaña no encontrada',
-      });
-    }
+  return c.json({ campaign }, 200);
+});
+
+// GET /api/campaigns/:id/characters (Exclusivo para el DM)
+campaignsModule.get('/:id/characters', async (c) => {
+  const user = c.get('user');
+  const campaignId = c.req.param('id');
+
+  const campaign = await prisma.campaign.findUnique({
+    where: { id: campaignId },
   });
 
-  // GET /api/campaigns/:id/characters (solo para el DM)
-  fastify.get('/:id/characters', async (request, reply) => {
-    const parseParams = CampaignParamsSchema.safeParse(request.params);
-    if (!parseParams.success) {
-      return reply.status(404).send({
+  if (!campaign) {
+    return c.json(
+      {
         statusCode: 404,
         error: 'Not Found',
         message: 'Campaña no encontrada',
-      });
-    }
+      },
+      404
+    );
+  }
 
-    try {
-      const characters = await campaignsService.getCampaignCharacters(
-        request.user!.id,
-        parseParams.data.id,
-      );
-      return reply.status(200).send({ characters });
-    } catch (err: unknown) {
-      const error = err as Error & { statusCode?: number };
-      const statusCode = error.statusCode || 404;
-      return reply.status(statusCode).send({
-        statusCode,
-        error: 'Not Found',
-        message: error.message || 'Campaña no encontrada',
-      });
-    }
+  if (!canManageCampaign(user.id, campaign)) {
+    return c.json(
+      {
+        statusCode: 403,
+        error: 'Forbidden',
+        message: 'Solo el Director de Juego de la campaña puede acceder a las fichas completas',
+      },
+      403
+    );
+  }
+
+  const characters = await prisma.character.findMany({
+    where: { campaignId },
+    include: {
+      owner: { select: { id: true, displayName: true } },
+    },
+    orderBy: { name: 'asc' },
   });
-};
+
+  return c.json({ characters }, 200);
+});
