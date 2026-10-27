@@ -5,8 +5,23 @@ import { SESSION_COOKIE_NAME, SESSION_TTL_SECONDS } from '../../lib/tokens.js';
 import { env } from '../../config/env.js';
 
 export const authRoutes: FastifyPluginAsync = async (fastify) => {
+  // Límite estricto de 5 intentos por minuto para autenticación (prevención de fuerza bruta)
+  const authRateLimitConfig = {
+    config: {
+      rateLimit: {
+        max: 5,
+        timeWindow: '1 minute',
+        errorResponseBuilder: () => ({
+          statusCode: 429,
+          error: 'Too Many Requests',
+          message: 'Demasiados intentos de autenticación. Por favor, espere un minuto.',
+        }),
+      },
+    },
+  };
+
   // POST /api/auth/register
-  fastify.post('/register', async (request, reply) => {
+  fastify.post('/register', authRateLimitConfig, async (request, reply) => {
     const parseResult = RegisterInputSchema.safeParse(request.body);
     if (!parseResult.success) {
       return reply.status(400).send({
@@ -42,7 +57,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // POST /api/auth/login
-  fastify.post('/login', async (request, reply) => {
+  fastify.post('/login', authRateLimitConfig, async (request, reply) => {
     const parseResult = LoginInputSchema.safeParse(request.body);
     if (!parseResult.success) {
       return reply.status(400).send({

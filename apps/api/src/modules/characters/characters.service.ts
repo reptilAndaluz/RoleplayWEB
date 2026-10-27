@@ -162,7 +162,9 @@ export class CharactersService {
       dataToUpdate.system = input.system;
     }
     if (input.campaignId !== undefined) {
-      dataToUpdate.campaign = input.campaignId ? { connect: { id: input.campaignId } } : { disconnect: true };
+      dataToUpdate.campaign = input.campaignId
+        ? { connect: { id: input.campaignId } }
+        : { disconnect: true };
     }
     if (input.data !== undefined) {
       dataToUpdate.data = input.data as Prisma.InputJsonValue;
