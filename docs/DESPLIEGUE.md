@@ -1,161 +1,112 @@
-# Guía de Despliegue en Producción (https://rol.burgoslabs.es)
+# Guía de Despliegue en Producción (Vercel + Neon)
+Dominio: **https://rol.burgoslabs.es**
 
-Esta guía detalla el procedimiento completo para desplegar la plataforma de forma segura y aislada en el servidor de producción utilizando **Docker Compose**, **Cloudflare Zero Trust (Tunnel)** y **Caddy**.
+Esta guía describe el procedimiento paso a paso para desplegar la plataforma utilizando **Vercel** para la API serverless y la SPA de React, **Neon** para PostgreSQL serverless, y **Cloudflare** para la gestión de DNS.
 
 ---
 
 ## 1. Arquitectura de Despliegue
 
 ```
-                      Internet (HTTPS)
-                            │
-                            ▼
-              ┌───────────────────────────┐
-              │  Cloudflare Edge / Proxy  │
-              │  SSL: Full (strict)       │
-              └─────────────┬─────────────┘
-                            │ Túnel cifrado saliente (sin puertos entrantes abiertos)
-                            ▼
-             ┌───────────────────────────────┐
-             │ cloudflared (contenedor)      │
-             └──────────────┬────────────────┘
-                            │ Red interna de Docker (bridge)
-                            ▼
-             ┌───────────────────────────────┐
-             │ caddy (:80 interno)           │
-             │ - Servir SPA /apps/web/dist   │
-             │ - Proxy /api/* -> api:3000    │
-             └──────────────┬────────────────┘
-                            │
-                            ▼
-             ┌───────────────────────────────┐
-             │ api (:3000 interno)           │
-             │ - Node.js 22 (usuario node)   │
-             │ - Fastify + Prisma            │
-             └──────────────┬────────────────┘
-                            │
-                            ▼
-             ┌───────────────────────────────┐
-             │ db (:5432 interno, sin ports) │
-             │ - PostgreSQL 16 Alpine        │
-             │ - Volumen persistente: pgdata │
-             └───────────────────────────────┘
+                      Usuario / Navegador
+                               │
+                               ▼
+                   Cloudflare DNS (DNS Only)
+                    rol.burgoslabs.es (CNAME)
+                               │
+                               ▼
+                   Vercel Edge & Serverless
+             ┌───────────────────────────────────┐
+             │ vercel.json                       │
+             │ ├─ /api/*   -> Hono (Node.js)     │
+             │ ├─ /health  -> Hono (Node.js)     │
+             │ └─ /*       -> SPA apps/web/dist  │
+             └─────────────────┬─────────────────┘
+                               │
+                               ▼ (SSL seguro)
+                    Neon PostgreSQL Serverless
+             ┌───────────────────────────────────┐
+             │ DATABASE_URL (-pooler PgBouncer)  │
+             │ DIRECT_URL   (conexión directa)   │
+             │ Rama: 'main' (Prod) / 'dev' (Prev)│
+             └───────────────────────────────────┘
 ```
 
 ---
 
-## 2. Pasos Previos en el Servidor
+## 2. Configuración en Neon (Base de Datos)
 
-### 2.1. Seguridad del Host (Firewall y SSH)
-El servidor **no debe exponer puertos al exterior** para la aplicación web ni la base de datos (todo el tráfico llega a través del túnel seguro de Cloudflare).
-
-1. **Configurar el firewall (UFW)**:
-   ```bash
-   sudo ufw default deny incoming
-   sudo ufw default allow outgoing
-   sudo ufw allow ssh
-   sudo ufw enable
-   ```
-
-2. **Asegurar SSH**:
-   - Acceder **únicamente mediante clave SSH pública**.
-   - Desactivar autenticación por contraseña en `/etc/ssh/sshd_config`:
-     ```text
-     PasswordAuthentication no
-     PubkeyAuthentication yes
-     PermitRootLogin prohibit-password
-     ```
-   - Reiniciar el servicio SSH: `sudo systemctl restart ssh`.
-
-3. **Verificación con Nmap**:
-   Ejecutar desde otra máquina:
-   ```bash
-   nmap -p- TU_IP_DEL_SERVIDOR
-   ```
-   *Solo debe figurar abierto el puerto SSH (22).*
+1. Crear un proyecto en [Neon](https://neon.tech) llamado `burgoslabs-rol`.
+2. Crear dos ramas en Neon:
+   - **`main`**: Base de datos de Producción.
+   - **`dev`**: Base de datos para entornos de Preview / Desarrollo.
+3. Copiar las cadenas de conexión para ambas ramas:
+   - **Pooled connection string** (con `-pooler`): para `DATABASE_URL`.
+   - **Direct connection string** (sin `-pooler`): para `DIRECT_URL`.
+4. **Política de Backups en Neon**:
+   - En el plan gratuito/hobby de Neon, la restauración de punto en el tiempo (PITR) y el historial de ramas permiten revertir la base de datos a cualquier punto en los últimos días.
+   - Adicionalmente, el propietario dispone del script local `scripts/backup.sh` para realizar volcados independientes con `pg_dump`.
 
 ---
 
-## 3. Configuración en Cloudflare Zero Trust
+## 3. Configuración en Vercel
 
-1. Acceder al panel de **Cloudflare Zero Trust** > **Networks** > **Tunnels**.
-2. Crear un nuevo túnel llamado, por ejemplo, `burgoslabs-rol`.
-3. Copiar el token proporcionado (`TUNNEL_TOKEN`).
-4. En la pestaña **Public Hostname**:
-   - **Public hostname**: `rol.burgoslabs.es`
-   - **Service Type**: `HTTP`
-   - **URL**: `caddy:80` (nombre del servicio Caddy en Docker Compose).
-5. En el panel principal de Cloudflare para el dominio `burgoslabs.es`:
-   - Ir a **SSL/TLS**.
-   - Establecer el modo de cifrado en **Full (strict)**.
-   - Activar **Always Use HTTPS**.
+1. Iniciar sesión en [Vercel](https://vercel.com) e importar el repositorio Git de `Catalogo_D-D`.
+2. Configuración del proyecto:
+   - **Framework Preset**: *Other* / *Vite*
+   - **Root Directory**: `./` (la raíz del monorepo)
+   - **Build Command**: `npm --workspace=packages/shared run build && npm --workspace=apps/web run build`
+   - **Output Directory**: `apps/web/dist`
+3. Variables de Entorno en Vercel:
+   Configurar los siguientes valores en **Settings > Environment Variables**:
 
----
-
-## 4. Configuración de Variables de Entorno
-
-En el servidor, dentro del directorio del proyecto `/home/reptil/Documentos/personal/Catalogo_D-D`:
-
-1. Crear el fichero `.env` a partir de la plantilla:
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Generar secretos criptográficamente seguros para la base de datos y la sesión:
-   ```bash
-   # Generar contraseñas y secretos aleatorios
-   openssl rand -base64 32
-   ```
-
-3. Rellenar las variables en `.env`:
-   ```env
-   NODE_ENV=production
-   PORT=3000
-   HOST=0.0.0.0
-   ALLOWED_ORIGIN=https://rol.burgoslabs.es
-
-   POSTGRES_USER=rol_user
-   POSTGRES_PASSWORD=<generada_con_openssl>
-   POSTGRES_DB=rol_db
-   DATABASE_URL=postgresql://rol_user:<generada_con_openssl>@db:5432/rol_db?schema=public
-
-   SESSION_SECRET=<generada_con_openssl_min_32_caracteres>
-
-   TUNNEL_TOKEN=<token_obtenido_en_cloudflare_zero_trust>
-   ```
+   | Variable | Entorno Production | Entorno Preview | Descripción |
+   |---|---|---|---|
+   | `DATABASE_URL` | Rama `main` de Neon (con `-pooler`) | Rama `dev` de Neon (con `-pooler`) | Cadena de conexión para runtime |
+   | `DIRECT_URL` | Rama `main` de Neon (directa) | Rama `dev` de Neon (directa) | Cadena directa para migraciones |
+   | `ALLOWED_ORIGIN` | `https://rol.burgoslabs.es` | `https://*.vercel.app` | Origen autorizado para CORS y CSRF |
+   | `SESSION_SECRET` | Generado con `openssl rand -base64 32` | Generado con `openssl rand -base64 32` | Clave secreta para cookies de sesión |
+   | `CRON_SECRET` | Generado con `openssl rand -hex 32` | Generado con `openssl rand -hex 32` | Token de autorización de Vercel Cron |
+   | `NODE_ENV` | `production` | `production` | Entorno de ejecución |
 
 ---
 
-## 5. Compilación del Frontend y Despliegue con Docker Compose
+## 4. Configuración del Dominio en Cloudflare
 
-1. **Compilar los paquetes compartidos y la SPA del frontend**:
-   ```bash
-   npm --workspace=packages/shared run build
-   npm --workspace=apps/web run build
-   ```
-   *Esto generará los ficheros estáticos listos para producción en `apps/web/dist`.*
-
-2. **Levantar todos los servicios en segundo plano**:
-   ```bash
-   docker compose up -d --build
-   ```
-
-3. **Comprobar el estado de salud de los servicios**:
-   ```bash
-   docker compose ps
-   ```
-   *Los contenedores `db`, `api`, `caddy` y `cloudflared` deben mostrar estado `Up (healthy)`.*
-
-4. **Verificar los logs del arranque**:
-   ```bash
-   docker compose logs -f api
-   ```
-   *Deberá verse la ejecución automática de `prisma migrate deploy` seguida de `API escuchando en http://0.0.0.0:3000 [production]`.*
+1. En Vercel, ir a **Settings > Domains** y añadir `rol.burgoslabs.es`.
+2. Vercel indicará el registro DNS esperado (típicamente un `CNAME` apuntando a `cname.vercel-dns.com`).
+3. En el panel de **Cloudflare DNS**:
+   - Crear un registro `CNAME`:
+     - **Nombre**: `rol`
+     - **Objetivo**: `cname.vercel-dns.com`
+     - **Proxy status**: **DNS only** (nube gris, **sin** proxy naranja).
+4. Vercel aprovisionará y renovará automáticamente el certificado SSL/TLS Let's Encrypt para `rol.burgoslabs.es`.
 
 ---
 
-## 6. Verificación Final de Aceptación
+## 5. Migraciones de Base de Datos y Despliegue
 
-1. Abrir en el navegador: `https://rol.burgoslabs.es`.
-2. Comprobar que responde con certificado HTTPS válido emitido por Cloudflare.
-3. Realizar una prueba de registro de usuario, creación de ficha de D&D 5e y creación de campaña.
+Las migraciones DDL nunca deben ejecutarse a ciegas dentro del build serverless sin control.
+
+1. **Aplicar migraciones a Producción**:
+   Desde la máquina local del desarrollador o terminal de despliegue con la variable `DIRECT_URL` de producción:
+   ```bash
+   DATABASE_URL="<neon_pooler_main>" DIRECT_URL="<neon_direct_main>" npx prisma migrate deploy --schema=./apps/api/prisma/schema.prisma
+   ```
+
+2. **Despliegue Automático**:
+   Cada push a la rama `main` en GitHub disparará un despliegue en Vercel.
+
+3. **Verificación**:
+   - Visitar `https://rol.burgoslabs.es/health` (debe responder `{"status":"ok", ...}`).
+   - Probar flujo de registro, creación de ficha D&D 5e y creación de campaña.
+
+---
+
+## 6. Protección de Ramas en GitHub
+
+Para garantizar la estabilidad en producción:
+1. En GitHub, ir a **Settings > Branches**.
+2. Añadir una regla de protección para `main`:
+   - Marcar **Require a pull request before merging**.
+   - Marcar **Require status checks to pass before merging** (verificando que los tests de Vitest pasen en CI antes del merge).
