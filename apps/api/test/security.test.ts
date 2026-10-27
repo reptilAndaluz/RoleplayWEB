@@ -469,5 +469,14 @@ describe('Tests de Seguridad Obligatorios (Sección 6 del Plan - 9 Requisitos)',
     expect(body.ok).toBe(true);
     expect(body.deletedSessions).toBeDefined();
     expect(body.deletedRateLimits).toBeDefined();
+
+    // 9.4 Falla cerrado si el token enviado está vacío
+    const emptyCron = await app.request('/api/cron/cleanup', {
+      method: 'GET',
+      headers: {
+        Authorization: 'Bearer ',
+      },
+    });
+    expect(emptyCron.status).toBe(401);
   });
 });

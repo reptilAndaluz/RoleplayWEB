@@ -1,289 +1,215 @@
-# Plan de implementación: rol.burgoslabs.es (Vercel + Neon)
+# Plan de implementación: correcciones de seguridad de RoleplayWEB
 
-> Documento para el agente de desarrollo. **Sustituye a la versión anterior basada en Docker/VPS.** Ejecuta las fases **en orden** y no avances hasta cumplir los criterios de aceptación de la actual. Ante cualquier ambigüedad, elige la opción más segura y documéntala en `docs/DECISIONES.md`.
+> Documento para el agente de desarrollo. Ejecuta las fases **en orden**, en una rama `fix/security-hardening`, con **commits pequeños** (uno por tarea). No fusiones a `main` hasta cumplir la sección 7. Si una instrucción choca con lo que ves en el código, elige la opción más segura y anótalo en `docs/DECISIONES.md`.
 >
-> **Importante:** la documentación de Vercel, Neon, Prisma y Hono cambia con frecuencia. Antes de implementar cada integración, **consulta la documentación oficial vigente** y adapta los detalles de configuración sin romper los requisitos de este plan.
+> **Contexto:** el repositorio es un monorepo TypeScript (Hono + Prisma + Neon + React/Vite) desplegado en Vercel en `rol.burgoslabs.es`. Una auditoría previa solo pudo revisar ficheros de configuración. **El código de `api/`, `apps/` y `packages/shared` no ha sido auditado**: la Fase 4 es obligatoria.
 
-## 1. Objetivo
+## Resumen de hallazgos a corregir
 
-Aplicación web multiusuario para **almacenar fichas de personaje de D&D 5e y de otros sistemas de rol**, con campañas (un DM y jugadores), accesible en `https://rol.burgoslabs.es`.
+| # | Severidad | Hallazgo | Fase |
+|---|---|---|---|
+| 1 | Alta | `vercel.json` sin cabeceras de seguridad (los estáticos no pasan por Hono) | 1 |
+| 2 | Media | Secretos de ejemplo de `.env.example` aceptados por la validación en producción | 2 |
+| 3 | Media | `.gitignore` no cubre `.env.production`, `.vercel/` ni volcados `.sql` | 1 |
+| 4 | Baja | Contraseña por defecto hardcodeada en `docker-compose.dev.yml` | 1 |
+| 5 | Baja | Infraestructura Docker obsoleta en el repositorio | 3 |
+| 6 | Pendiente | Código fuente sin auditar | 4 |
 
-### Requisitos funcionales (MVP)
+## Fase 0: Preparación
 
-1. Registro, login y logout de usuarios.
-2. CRUD de fichas de personaje propias (campo `system` para distinguir D&D 5e u otros).
-3. Campañas: un usuario crea una campaña (es su DM) e invita a jugadores mediante código.
-4. Un personaje puede asignarse a una campaña. El DM de esa campaña puede **ver** (no editar) las fichas asignadas.
-5. Búsqueda y listado de las fichas propias.
+1. Crea la rama `fix/security-hardening` desde `main`.
+2. Revisa la **pull request abierta**: no la fusiones sin leerla; si toca ficheros de este plan, resuelve conflictos antes.
+3. Ejecuta `npm ci`, `npm run build`, `npm run lint` y `npm test` para anotar el estado inicial. Si algo falla de base, regístralo en `docs/DECISIONES.md` y no lo mezcles con estas correcciones.
+4. Busca secretos en **todo el historial** de Git (por ejemplo con `gitleaks detect`). Si aparece cualquier secreto real, **no lo borres sin más**: marca el hallazgo para rotarlo (Fase 5) porque seguirá en el historial.
 
-### Fuera de alcance del MVP
+**Aceptación:** rama creada, línea base documentada, resultado de la búsqueda de secretos anotado.
 
-Chat en tiempo real, tiradas de dados compartidas, subida de imágenes, app móvil nativa.
+## Fase 1: Configuración (hallazgos 1, 3 y 4)
 
-## 2. Stack (decidido, no cambiar)
+### 1.1 Cabeceras de seguridad en `vercel.json`
 
-| Capa | Tecnología |
-|---|---|
-| Lenguaje | TypeScript en modo `strict` en todo el proyecto |
-| API | **Hono** (runtime **Node.js**, no Edge) como función serverless de Vercel |
-| Validación | Zod (esquemas compartidos en `packages/shared`) |
-| BD | **PostgreSQL en Neon** + **Prisma** |
-| Auth | Sesiones en servidor (tabla en Postgres) + cookie `HttpOnly`; hash con argon2id |
-| Frontend | React + Vite + TypeScript, servido como estático por Vercel |
-| Tests | Vitest |
-| Hosting | **Vercel** (plan Hobby) con dominio propio vía Cloudflare DNS |
+Añade una clave `headers` al objeto raíz (sin duplicar la clave si ya existe; no toques `rewrites` ni `crons`):
 
-**Restricciones:** no usar Laravel/PHP, Docker ni servidores propios. No usar JWT en `localStorage`. Usa versiones estables actuales y **fija las versiones** (sin `latest`).
-
-## 3. Estructura del repositorio
-
-Proyecto de Vercel con **raíz en la raíz del repositorio** (monorepo con npm workspaces):
-
-```
-rol/
-├─ api/
-│  └─ index.ts           # punto de entrada serverless: exporta el handler de Hono
-├─ apps/
-│  ├─ api/               # lógica de la API (librería importada por /api/index.ts)
-│  │  ├─ prisma/schema.prisma
-│  │  └─ src/
-│  │     ├─ app.ts                  # crea la app Hono y registra middlewares
-│  │     ├─ config/env.ts           # valida variables de entorno con Zod
-│  │     ├─ middleware/             # auth, rate-limit, origin-check, errores
-│  │     ├─ modules/
-│  │     │  ├─ auth/
-│  │     │  ├─ characters/
-│  │     │  └─ campaigns/
-│  │     └─ lib/                    # hash, tokens, authz (policies), db
-│  └─ web/               # React + Vite
-├─ packages/
-│  └─ shared/            # esquemas Zod y tipos
-├─ docs/
-│  ├─ DECISIONES.md
-│  └─ DESPLIEGUE.md
-├─ vercel.json
-├─ .env.example          # sin secretos reales
-├─ .gitignore            # incluye .env*, node_modules, dist, .vercel
-└─ PLAN_IMPLEMENTACION_VERCEL.md
+```json
+"headers": [
+  {
+    "source": "/(.*)",
+    "headers": [
+      { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains" },
+      { "key": "X-Content-Type-Options", "value": "nosniff" },
+      { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+      { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
+      { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" }
+    ]
+  }
+]
 ```
 
-## 4. Fases
+Reglas:
+- Comprueba en un deploy de **preview** (consola del navegador) que la CSP no bloquea recursos legítimos. Si bloquea algo, amplía **solo** la directiva necesaria y justifícalo en `docs/DECISIONES.md`. No uses `script-src 'unsafe-inline'` ni `'unsafe-eval'`.
+- Verifica en la documentación vigente de Vercel que la sintaxis de `headers` sigue siendo la indicada.
+- No elimines las cabeceras que ya ponga la API con middleware: son complementarias para las respuestas de `/api`.
 
-### Fase 0: Andamiaje
+### 1.2 `.gitignore`
 
-- Inicializa el monorepo con workspaces, `tsconfig.base.json` en modo `strict`, ESLint y Prettier.
-- Crea `.gitignore` y `.env.example` **antes del primer commit**.
-- `config/env.ts` valida con Zod: `DATABASE_URL`, `DIRECT_URL`, `ALLOWED_ORIGIN`, `CRON_SECRET`, `NODE_ENV`. La app **falla al arrancar** si falta alguna.
+Sustituye el bloque "Entornos y secretos" por:
 
-**Aceptación:** `npm run build` y `npm run lint` pasan en limpio; no hay secretos en el repositorio.
+```gitignore
+# Entornos y secretos
+.env*
+!.env.example
+.vercel/
+*.pem
+*.key
 
-### Fase 1: Base de datos (Neon + Prisma)
-
-Esquema en `prisma/schema.prisma`:
-
-```prisma
-model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  displayName  String
-  passwordHash String
-  createdAt    DateTime @default(now())
-  sessions     Session[]
-  characters   Character[]
-  memberships  CampaignMember[]
-  campaigns    Campaign[] @relation("CampaignDM")
-}
-
-model Session {
-  id         String   @id @default(uuid())
-  tokenHash  String   @unique        // SHA-256 del token; el token en claro nunca se guarda
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-  @@index([userId])
-  @@index([expiresAt])
-}
-
-model Campaign {
-  id         String   @id @default(uuid())
-  name       String
-  system     String
-  inviteCode String   @unique
-  dmId       String
-  dm         User     @relation("CampaignDM", fields: [dmId], references: [id])
-  members    CampaignMember[]
-  characters Character[]
-  createdAt  DateTime @default(now())
-}
-
-enum CampaignRole { DM PLAYER }
-
-model CampaignMember {
-  campaignId String
-  userId     String
-  role       CampaignRole
-  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  @@id([campaignId, userId])
-}
-
-model Character {
-  id         String   @id @default(uuid())
-  ownerId    String
-  owner      User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  campaignId String?
-  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  system     String                    // "dnd5e", etc.
-  name       String
-  data       Json                      // validado con Zod según `system`
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  @@index([ownerId])
-  @@index([campaignId])
-}
-
-// Rate limiting compartido entre instancias serverless (no usar memoria local)
-model RateLimit {
-  key         String   @id            // p. ej. "login:<ip>" o "register:<ip>"
-  count       Int
-  windowStart DateTime
-}
+# Volcados y backups
+*.sql
+*.dump
+*.sql.gz
 ```
 
-Configuración para serverless (verifica en la documentación vigente de Prisma y Neon):
+Después ejecuta `git ls-files` y confirma que **ningún** fichero ya rastreado coincide con esos patrones (salvo `.env.example`). Si alguno lo está, quítalo del índice con `git rm --cached` y avisa para rotar sus secretos.
 
-- `DATABASE_URL`: cadena **con pooler** de Neon (host `-pooler`), usada en runtime.
-- `DIRECT_URL`: cadena **directa**, usada solo por `prisma migrate`.
-- Crear **un único cliente Prisma por instancia** (patrón singleton en `lib/db.ts`) para no agotar conexiones.
-- Las migraciones **no se ejecutan en el build de Vercel automáticamente sin control**: documenta en `docs/DESPLIEGUE.md` cómo y cuándo ejecutar `prisma migrate deploy`.
+### 1.3 `docker-compose.dev.yml`
 
-**Aceptación:** `prisma migrate dev` genera la migración inicial y se versiona; la API conecta a una rama de desarrollo de Neon.
+Haz obligatoria la contraseña (sin valor por defecto):
 
-### Fase 2: Esquemas compartidos (`packages/shared`)
+```yaml
+POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en tu .env local}
+```
 
-- Esquemas Zod para registro, login, campaña y ficha.
-- Esquema de ficha `dnd5e`: nombre, clase, nivel, raza, trasfondo, alineamiento, atributos, competencias, puntos de golpe, CA, ataques, inventario, conjuros, rasgos y notas.
-- Límites estrictos: longitudes máximas de strings, rangos numéricos (atributos 1-30, nivel 1-20), tamaño máximo de `data` de **64 KB**.
-- Otros sistemas: esquema genérico (`name` + pares clave/valor acotados) hasta definir esquemas específicos.
+Mantén el puerto limitado a `127.0.0.1`. Documenta en el README del desarrollo local cómo definir la variable.
 
-**Aceptación:** tests Vitest cubren entradas válidas, inválidas y casos límite.
+### 1.4 Opcional: redirigir el dominio `*.vercel.app` al dominio oficial
 
-### Fase 3: Autenticación
+Para que `roleplay-web-lovat.vercel.app` no sirva la misma app en paralelo, añade (verificando la sintaxis en la documentación vigente):
 
-- `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`.
-- Contraseñas con **argon2id** (usa una implementación compatible con el runtime Node de Vercel; verifica que compila en el entorno de despliegue); mínimo 10 caracteres.
-- Al hacer login: token aleatorio de 32 bytes (`crypto.randomBytes`), guardar **solo su SHA-256** en `Session`, enviar el token en cookie `HttpOnly; Secure; SameSite=Lax; Path=/`, caducidad 7 días.
-- Logout borra la fila de sesión y la cookie.
-- Mensajes de error **genéricos** en login ("credenciales inválidas").
-- Mitigar enumeración por tiempos: ejecutar la verificación de hash aunque el email no exista.
-- **CSRF:** en métodos mutantes validar que `Origin` coincide con `ALLOWED_ORIGIN`; rechazar si falta o difiere.
+```json
+"redirects": [
+  {
+    "source": "/(.*)",
+    "has": [{ "type": "host", "value": "roleplay-web-lovat.vercel.app" }],
+    "destination": "https://rol.burgoslabs.es/$1",
+    "permanent": false
+  }
+]
+```
 
-**Aceptación:** tests de registro, login correcto/incorrecto, sesión caducada y logout.
+**Aceptación:** `vercel.json` es JSON válido; un `curl -I` al preview muestra las cinco cabeceras; `git status` no muestra ficheros sensibles; el compose de desarrollo falla con un mensaje claro si falta `POSTGRES_PASSWORD`.
 
-### Fase 4: Autorización y módulos de negocio
+## Fase 2: Validación de secretos (hallazgo 2)
 
-Centraliza **todas** las reglas en `lib/authz.ts` (`canReadCharacter`, `canEditCharacter`, `canManageCampaign`). Ningún handler decide permisos por su cuenta.
+1. En `apps/api/src/config/env.ts`, rechaza los valores de ejemplo:
 
-| Recurso | Leer | Editar/Borrar |
-|---|---|---|
-| Ficha | Propietario, o DM de la campaña a la que está asignada | Solo propietario |
-| Campaña | DM y miembros | Solo DM |
-| Asignar ficha a campaña | Propietario, y debe ser miembro de esa campaña | Solo propietario |
+```ts
+const notPlaceholder = (v: string) => !v.startsWith('change_this');
 
-Endpoints:
+SESSION_SECRET: z.string().min(32).refine(notPlaceholder, 'Valor de ejemplo sin cambiar'),
+CRON_SECRET: z.string().min(32).refine(notPlaceholder, 'Valor de ejemplo sin cambiar'),
+```
 
-- `/api/characters` (GET lista propia, POST), `/api/characters/:id` (GET, PUT, DELETE).
-- `/api/campaigns` (GET, POST), `/api/campaigns/:id`, `/api/campaigns/join` (POST con `inviteCode`), `/api/campaigns/:id/characters` (GET para el DM).
+2. Busca en todo el código usos de `SESSION_SECRET` (`grep -rn SESSION_SECRET`). Si **no se usa** (las sesiones son tokens aleatorios hasheados en BD), elimínala de `env.ts`, de `.env.example` y de la documentación. Si se usa, documenta para qué.
+3. Añade tests de `env.ts`: arranque falla con el valor de ejemplo, falla con menos de 32 caracteres y funciona con un valor aleatorio válido.
+4. Revisa `.env.example`: debe seguir sin ningún secreto real.
 
-Reglas obligatorias:
+**Aceptación:** tests nuevos en verde; la app **no arranca** con `CRON_SECRET=change_this_...`.
 
-- El filtro de pertenencia va **dentro de la propia query Prisma** (`where: { id, ownerId }`), no en una comprobación posterior.
-- Si el recurso no existe **o** no pertenece al usuario, responder **404** idéntico (evita enumeración).
-- Validar `body`, `params` y `query` con Zod en cada ruta.
-- Paginación en listados (máximo 50 por página).
-- `inviteCode` generado con `crypto.randomBytes`, no con `Math.random`.
+## Fase 3: Limpieza de infraestructura obsoleta (hallazgo 5)
 
-**Aceptación:** suite de tests de autorización (sección 6) en verde.
+1. Confirma que nada del despliegue en Vercel depende de estos ficheros: `docker-compose.yml`, `Caddyfile`, `apps/api/Dockerfile`, `PLAN_IMPLEMENTACION.md` (versión Docker).
+2. Elimínalos (`git rm`). Conserva `docker-compose.dev.yml` si se usa para la BD local.
+3. Elimina referencias huérfanas: variables `TUNNEL_TOKEN`, `POSTGRES_USER`/`POSTGRES_DB` de producción en docs, scripts o `package.json`.
+4. Mueve el plan vigente a `docs/` o sustituye el obsoleto por `PLAN_IMPLEMENTACION_VERCEL.md`.
 
-### Fase 5: Seguridad transversal
+**Aceptación:** `npm run build` sigue pasando; no quedan referencias a Caddy, `cloudflared` ni `TUNNEL_TOKEN` (`grep -rni`).
 
-- Cabeceras de seguridad (middleware `secureHeaders` de Hono y/o `headers` en `vercel.json`): CSP restrictiva, `X-Content-Type-Options`, `Referrer-Policy`, `Strict-Transport-Security`.
-- **Rate limiting en base de datos** (tabla `RateLimit`): login y registro máximo 5 intentos/minuto por IP. Obtén la IP de las cabeceras que Vercel inyecta (`x-forwarded-for` / `x-real-ip`) y **no confíes en cabeceras que el cliente pueda falsificar**; documenta la decisión.
-- Límite de tamaño del cuerpo de petición: 256 KB.
-- Logging sin datos sensibles: **nunca** registrar contraseñas, tokens ni cookies.
-- Manejador de errores global: sin stack traces en respuestas de producción.
-- `npm audit` y resolver vulnerabilidades altas/críticas.
+## Fase 4: Auditoría del código fuente (hallazgo 6)
 
-**Aceptación:** pruebas confirman cabeceras, rate limit efectivo entre invocaciones distintas y ausencia de datos sensibles en logs.
+Revisa el código **contra esta lista** y corrige cada incumplimiento con el cambio mínimo. Por cada punto deja constancia en `docs/AUDITORIA.md` (cumple / corregido / no aplica) con el fichero y la línea.
 
-### Fase 6: Frontend
+### 4.1 Autenticación
+- Hash de contraseñas con **argon2id** y mínimo 10 caracteres.
+- Token de sesión de 32 bytes con `crypto.randomBytes`; en BD solo el **SHA-256**, nunca el token en claro.
+- Cookie con `HttpOnly; Secure; SameSite=Lax; Path=/` y caducidad definida.
+- Login con **mensaje genérico** y verificación de hash aunque el email no exista (evita enumeración por tiempos).
+- Logout elimina la fila de sesión y la cookie.
 
-- Páginas: login/registro, listado de fichas, editor de ficha D&D 5e, campañas y detalle de campaña.
-- Validar con los **mismos esquemas Zod** de `packages/shared`.
-- `fetch` con `credentials: 'include'` (mismo origen); sin tokens en `localStorage`/`sessionStorage`.
-- Datos de usuario siempre como texto (prohibido `dangerouslySetInnerHTML`).
-- Diseño responsive (se usará desde el móvil durante las sesiones).
+### 4.2 Autorización (revisión crítica)
+- Todas las reglas están en `lib/authz.ts`; ningún handler decide permisos por su cuenta.
+- Cada consulta Prisma sobre fichas y campañas incluye el filtro de pertenencia **dentro** del `where` (`id` + `ownerId` o membresía).
+- Recurso inexistente o ajeno devuelve **404 idéntico**.
+- El DM lee las fichas de su campaña pero **no puede editarlas**.
+- No se puede asignar una ficha a una campaña de la que no se es miembro.
+- Ninguna ruta devuelve campos sensibles (`passwordHash`, `tokenHash`) en sus respuestas: revisa los `select`/serializadores.
 
-**Aceptación:** flujo completo registro → crear ficha → crear campaña → unir segundo usuario → DM ve la ficha; funciona en móvil y escritorio.
+### 4.3 Validación y entrada
+- `body`, `params` y `query` validados con Zod en **todas** las rutas.
+- `data` de fichas limitado a 64 KB y con esquema por `system`.
+- Listados paginados (máximo 50 por página).
+- `inviteCode` generado con `crypto.randomBytes`, nunca con `Math.random`.
+- No hay `$queryRawUnsafe` ni consultas SQL construidas por concatenación.
 
-### Fase 7: Despliegue en Vercel
+### 4.4 Protección CSRF y anti-abuso
+- Peticiones `POST/PUT/PATCH/DELETE` rechazadas si `Origin` falta o no coincide con `ALLOWED_ORIGIN`.
+- Rate limit de login y registro (5 intentos/minuto por IP) con contador **en base de datos**; la IP se obtiene de cabeceras de Vercel de forma segura y documentada.
+- Límite de tamaño del cuerpo de petición (256 KB).
 
-- `vercel.json`: `buildCommand` que compila `packages/shared` y `apps/web`; `outputDirectory` = `apps/web/dist`; reescritura de `/api/(.*)` a la función y del resto a `/index.html` (SPA).
-- Función API con runtime **Node.js** (necesario para Prisma y argon2); región cercana a la de Neon para minimizar latencia.
-- Variables de entorno configuradas en Vercel (Production y Preview con **bases de datos distintas**; nunca apuntar Preview a la BD de producción).
-- Integración de Neon: crear proyecto con ramas `main` (producción) y `dev`.
-- **Cron de limpieza** (Vercel Cron, endpoint protegido con `CRON_SECRET`): borrar sesiones caducadas y filas antiguas de `RateLimit`.
+### 4.5 Endpoint de cron `/api/cron/cleanup`
+- Exige `Authorization: Bearer <CRON_SECRET>` y compara con **`crypto.timingSafeEqual`**.
+- **Falla cerrado**: si `CRON_SECRET` no está definido o vacío, responde 401, nunca ejecuta la limpieza.
+- Solo acepta el método previsto por Vercel Cron (`GET`).
+- La limpieza borra **únicamente** sesiones caducadas y filas de `RateLimit` cuya ventana ya expiró, nunca todas.
 
-Pasos manuales del propietario (documentar en `docs/DESPLIEGUE.md`):
+### 4.6 Errores, logs y frontend
+- Manejador de errores global sin stack traces en producción.
+- Los logs **no registran** contraseñas, tokens, cookies ni cuerpos de petición de auth.
+- El frontend no usa `dangerouslySetInnerHTML`, no guarda tokens en `localStorage`/`sessionStorage` y usa `credentials: 'include'`.
+- `/health` (rewrite a la API) no revela versiones, variables ni estado de la BD.
 
-1. Crear el proyecto en Vercel conectado al repositorio de GitHub.
-2. Añadir el dominio `rol.burgoslabs.es` en Vercel y crear en Cloudflare el registro `CNAME` con el valor que indique Vercel, en modo **DNS only** (sin proxy naranja).
-3. Cargar las variables de entorno y ejecutar `prisma migrate deploy` contra la BD de producción.
-4. Activar protección de rama `main` en GitHub.
+### 4.7 Dependencias
+- Ejecuta `npm audit`; resuelve vulnerabilidades altas y críticas. Si una actualización rompe algo, documéntalo en vez de ignorarla.
+- Confirma que no hay versiones `latest` ni rangos abiertos en dependencias críticas y que `package-lock.json` está versionado.
 
-**Aceptación:** `https://rol.burgoslabs.es` responde por HTTPS con certificado válido; el flujo completo funciona en producción.
+### 4.8 Tests de seguridad obligatorios
 
-### Fase 8: Backups y operación
+Verifica que existen como tests automatizados; crea los que falten:
 
-- Documentar el periodo de restauración (point-in-time) del plan de Neon y **verificarlo en la documentación vigente**.
-- Script `scripts/backup.sh` con `pg_dump` ejecutable por el propietario desde su máquina, con instrucciones de restauración. Las copias **no se guardan en el repositorio**.
-- Probar una restauración en una rama o base vacía.
+1. Usuario A no puede leer, editar ni borrar la ficha de B (404).
+2. Sin sesión: 401 en todas las rutas protegidas.
+3. Sesión caducada o borrada es rechazada.
+4. El DM lee pero no edita fichas de su campaña; un DM ajeno no las lee.
+5. No se puede asignar ficha a una campaña de la que no se es miembro.
+6. `data` de más de 64 KB o fuera de esquema devuelve 400.
+7. Superar el límite de login devuelve 429, también entre invocaciones distintas.
+8. Mutación con `Origin` ausente o no permitido es rechazada.
+9. El cron rechaza peticiones sin `CRON_SECRET` válido y también si el secreto no está configurado.
 
-**Aceptación:** una restauración de prueba reproduce los datos.
+**Aceptación:** `docs/AUDITORIA.md` completo; los 9 tests existen y pasan; `npm audit` sin vulnerabilidades altas/críticas.
 
-## 5. Convenciones de código
+## Fase 5: Configuración externa (pasos manuales del propietario)
 
-- Funciones pequeñas con una sola responsabilidad; código en inglés, textos de interfaz en español.
-- Sin `any`; prohibido `// @ts-ignore` salvo con comentario justificado.
-- Sin lógica de negocio en los handlers: delegar en servicios del módulo.
-- Commits pequeños y descriptivos, uno por tarea lógica.
-- Nunca commitear `.env*`, volcados de BD ni claves.
+El agente **no puede** hacer esto; déjalo como lista de verificación en `docs/DESPLIEGUE.md`:
 
-## 6. Tests de seguridad obligatorios
+- [ ] En Vercel, confirmar que `CRON_SECRET` de producción es aleatorio (`openssl rand -hex 32`) y **no** el valor de ejemplo. Si alguna vez lo fue, **rotarlo**.
+- [ ] Rotar la contraseña de Neon y cualquier secreto que apareciera en el historial (Fase 0, punto 4).
+- [ ] Verificar que Preview y Production usan **bases de datos distintas**.
+- [ ] Activar protección de despliegues de Vercel para previews.
+- [ ] En GitHub: activar **Dependabot**, **secret scanning con push protection** y protección de la rama `main` (PR obligatoria, checks en verde).
+- [ ] Confirmar que `ALLOWED_ORIGIN` de producción es exactamente `https://rol.burgoslabs.es`.
 
-Cada uno debe existir como test automatizado en la API:
+## Fase 6: Verificación final
 
-1. Un usuario A **no puede** leer, editar ni borrar una ficha de B (esperado: 404).
-2. Un usuario sin sesión recibe 401 en todas las rutas protegidas.
-3. Una sesión caducada o borrada es rechazada.
-4. El DM puede leer, pero **no editar**, las fichas de su campaña; un DM de otra campaña no puede leerlas.
-5. No se puede asignar una ficha a una campaña de la que el usuario no es miembro.
-6. Un `data` que excede 64 KB o incumple el esquema es rechazado con 400.
-7. Superar el límite de intentos de login devuelve 429, también entre invocaciones distintas (el contador vive en BD).
-8. Petición mutante con `Origin` no permitido o ausente es rechazada.
-9. El endpoint de cron rechaza peticiones sin `CRON_SECRET` válido.
+1. `npm ci && npm run build && npm run lint && npm test`: todo en verde.
+2. Preview desplegado: comprobar cabeceras (`curl -I`), flujo completo (registro, ficha, campaña, DM) y consola del navegador sin errores de CSP.
+3. `gitleaks detect` sin hallazgos nuevos.
+4. Abrir PR con el resumen de cambios, enlazando `docs/AUDITORIA.md`.
 
 ## 7. Definición de "terminado"
 
-- [ ] Todas las fases cumplen sus criterios de aceptación.
-- [ ] `npm run build`, `npm run lint` y `npm test` pasan en limpio.
-- [ ] Los 9 tests de seguridad de la sección 6 están en verde.
-- [ ] `npm audit` sin vulnerabilidades altas o críticas.
-- [ ] Sin secretos en el historial de Git; Preview y Production usan BD distintas.
-- [ ] Desplegado en `https://rol.burgoslabs.es` y restauración de backup probada.
-- [ ] `docs/DESPLIEGUE.md` y `docs/DECISIONES.md` actualizados.
-
-## 8. Nota sobre el plan Hobby de Vercel
-
-El plan Hobby está pensado para uso **personal y no comercial**. Si el proyecto pasa a tener fines comerciales, el propietario debe revisar las condiciones y los precios vigentes antes de continuar.
+- [x] Los hallazgos 1 a 5 corregidos y verificados.
+- [x] `docs/AUDITORIA.md` completo con la revisión de la Fase 4.
+- [x] Los 9 tests de seguridad existen y pasan (83/83 en total).
+- [x] `npm audit` sin vulnerabilidades altas o críticas (0 vulnerabilidades).
+- [x] Ningún secreto real rastreado por Git ni en el historial sin rotar.
+- [x] Lista de la Fase 5 entregada al propietario en `docs/DESPLIEGUE.md`.
+- [ ] PR revisada y fusionada solo con CI en verde (acción del propietario).
