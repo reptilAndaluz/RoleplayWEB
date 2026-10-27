@@ -6,6 +6,7 @@ import csrfPlugin from './plugins/csrf.js';
 import authPlugin from './plugins/auth.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { campaignsRoutes } from './modules/campaigns/campaigns.routes.js';
+import { charactersRoutes } from './modules/characters/characters.routes.js';
 
 export function buildServer() {
   const app = Fastify({
@@ -35,6 +36,7 @@ export function buildServer() {
   // Módulos
   app.register(authRoutes, { prefix: '/api/auth' });
   app.register(campaignsRoutes, { prefix: '/api/campaigns' });
+  app.register(charactersRoutes, { prefix: '/api/characters' });
 
   // Health check
   app.get('/health', async (_request, reply): Promise<Health> => {
