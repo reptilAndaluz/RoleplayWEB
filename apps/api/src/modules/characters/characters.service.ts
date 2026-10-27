@@ -153,14 +153,24 @@ export class CharactersService {
       }
     }
 
+    const dataToUpdate: Prisma.CharacterUpdateInput = {};
+
+    if (input.name !== undefined) {
+      dataToUpdate.name = input.name;
+    }
+    if (input.system !== undefined) {
+      dataToUpdate.system = input.system;
+    }
+    if (input.campaignId !== undefined) {
+      dataToUpdate.campaign = input.campaignId ? { connect: { id: input.campaignId } } : { disconnect: true };
+    }
+    if (input.data !== undefined) {
+      dataToUpdate.data = input.data as Prisma.InputJsonValue;
+    }
+
     const updated = await prisma.character.update({
       where: { id: characterId },
-      data: {
-        name: input.name ?? existing.name,
-        system: input.system ?? existing.system,
-        campaignId: input.campaignId !== undefined ? input.campaignId : existing.campaignId,
-        data: input.data !== undefined ? (input.data as Prisma.InputJsonValue) : existing.data,
-      },
+      data: dataToUpdate,
       include: {
         campaign: { select: { id: true, name: true, dmId: true } },
       },
