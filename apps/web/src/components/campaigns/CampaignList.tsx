@@ -29,7 +29,8 @@ export const CampaignList: React.FC<CampaignListProps> = ({ onSelectCampaign }) 
 
   // Crear campaña
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
+  const [system, setSystem] = useState('dnd5e');
+  const [customSystem, setCustomSystem] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -62,17 +63,24 @@ export const CampaignList: React.FC<CampaignListProps> = ({ onSelectCampaign }) 
       return;
     }
 
+    const selectedSystem = system === 'other' ? customSystem.trim() : system.trim();
+    if (!selectedSystem) {
+      setCreateError('Debes indicar el sistema de la campaña');
+      return;
+    }
+
     setCreating(true);
     setCreateError(null);
 
     try {
       const res = await api.post<{ campaign: { id: string } }>('/api/campaigns', {
         name: name.trim(),
-        description: description.trim() || undefined,
+        system: selectedSystem,
       });
       setShowCreateModal(false);
       setName('');
-      setDescription('');
+      setSystem('dnd5e');
+      setCustomSystem('');
       onSelectCampaign(res.campaign.id);
     } catch (err) {
       setCreateError(err instanceof ApiError ? err.message : 'Error al crear campaña');
@@ -297,18 +305,41 @@ export const CampaignList: React.FC<CampaignListProps> = ({ onSelectCampaign }) 
                 />
               </div>
 
-              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                <label className="form-label" htmlFor="camp-desc">
-                  Descripción o Ambientación (opcional)
+              <div className="form-group" style={{ marginBottom: system === 'other' ? '1rem' : '1.5rem' }}>
+                <label className="form-label" htmlFor="camp-system">
+                  Sistema de Juego
                 </label>
-                <textarea
-                  id="camp-desc"
-                  className="form-textarea"
-                  placeholder="Una tierra sombría envuelta en brumas..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
+                <select
+                  id="camp-system"
+                  className="form-select"
+                  value={system}
+                  onChange={(e) => setSystem(e.target.value)}
+                >
+                  <option value="dnd5e">Dungeons &amp; Dragons 5ª Edición (D&amp;D 5e)</option>
+                  <option value="cyberpunk">Cyberpunk / Sci-Fi</option>
+                  <option value="cthulhu">La Llamada de Cthulhu / Terror</option>
+                  <option value="pathfinder">Pathfinder</option>
+                  <option value="generic">Sistema Genérico</option>
+                  <option value="other">Otro Sistema Personalizado...</option>
+                </select>
               </div>
+
+              {system === 'other' && (
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label className="form-label" htmlFor="camp-custom-system">
+                    Nombre del Sistema Personalizado
+                  </label>
+                  <input
+                    id="camp-custom-system"
+                    type="text"
+                    className="form-input"
+                    placeholder="Ej. Vampiro: La Mascarada, Star Wars, etc."
+                    value={customSystem}
+                    onChange={(e) => setCustomSystem(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
                 <button
