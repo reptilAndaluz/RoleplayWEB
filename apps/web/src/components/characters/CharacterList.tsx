@@ -81,10 +81,10 @@ export const CharacterList: React.FC<CharacterListProps> = ({ onSelectCharacter 
       initialData = createDefaultDnd5eData();
     } else {
       initialData = {
-        customFields: [
-          { key: 'Concepto', value: '' },
-          { key: 'Salud', value: '100' },
-        ],
+        description: '',
+        stats: { Salud: '100' },
+        traits: [],
+        inventory: [],
         notes: '',
       };
     }
